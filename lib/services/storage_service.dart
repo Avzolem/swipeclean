@@ -56,6 +56,10 @@ class StorageService {
     await _reviewedBox?.put(photoId, photoId);
   }
 
+  Future<void> unmarkAsReviewed(String photoId) async {
+    await _reviewedBox?.delete(photoId);
+  }
+
   bool isReviewed(String photoId) {
     return _reviewedBox?.containsKey(photoId) ?? false;
   }

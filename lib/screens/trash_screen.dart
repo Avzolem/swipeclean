@@ -154,40 +154,77 @@ class TrashScreen extends StatelessWidget {
                     ],
                   ),
                   child: SafeArea(
-                    child: Row(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: Text(
-                            trashProvider.hasSelection
-                                ? '${trashProvider.selectedCount} seleccionadas'
-                                : 'Selecciona fotos para eliminar',
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ),
-                        if (trashProvider.hasSelection)
-                          ElevatedButton.icon(
-                            onPressed: trashProvider.isDeleting
-                                ? null
-                                : () => _confirmDelete(context, trashProvider),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                trashProvider.hasSelection
+                                    ? '${trashProvider.selectedCount} seleccionadas'
+                                    : 'Selecciona fotos para restaurar o eliminar',
+                                style: const TextStyle(color: Colors.white70),
                               ),
                             ),
-                            icon: trashProvider.isDeleting
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
+                          ],
+                        ),
+                        if (trashProvider.hasSelection)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              children: [
+                                // Botón Restaurar
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: trashProvider.isDeleting
+                                        ? null
+                                        : () => _confirmRestore(context, trashProvider),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
                                     ),
-                                  )
-                                : const Icon(Icons.delete_forever, color: Colors.white),
-                            label: Text(
-                              'Eliminar (${trashProvider.selectedCount})',
-                              style: const TextStyle(color: Colors.white),
+                                    icon: const Icon(Icons.restore, color: Colors.white),
+                                    label: const Text(
+                                      'Restaurar',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                // Botón Eliminar
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: trashProvider.isDeleting
+                                        ? null
+                                        : () => _confirmDelete(context, trashProvider),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                    icon: trashProvider.isDeleting
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.delete_forever, color: Colors.white),
+                                    label: const Text(
+                                      'Eliminar',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                       ],
@@ -271,6 +308,47 @@ class TrashScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmRestore(BuildContext context, TrashProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          '¿Restaurar fotos?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Se restaurarán ${provider.selectedCount} fotos y volverán a aparecer en la cola de revisión.',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final restoredCount = await provider.restoreSelected();
+              if (context.mounted) {
+                context.read<PhotoProvider>().refresh();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('$restoredCount fotos restauradas'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Restaurar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

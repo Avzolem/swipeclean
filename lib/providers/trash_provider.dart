@@ -37,7 +37,22 @@ class TrashProvider extends ChangeNotifier {
 
   Future<void> restoreFromTrash(String photoId) async {
     await _storageService.removeFromTrash(photoId);
+    await _storageService.unmarkAsReviewed(photoId);
     loadTrash();
+  }
+
+  Future<int> restoreSelected() async {
+    if (_selectedItems.isEmpty) return 0;
+
+    int restoredCount = 0;
+    for (final photoId in _selectedItems.toList()) {
+      await _storageService.removeFromTrash(photoId);
+      await _storageService.unmarkAsReviewed(photoId);
+      restoredCount++;
+    }
+    _selectedItems.clear();
+    loadTrash();
+    return restoredCount;
   }
 
   void toggleSelection(String photoId) {

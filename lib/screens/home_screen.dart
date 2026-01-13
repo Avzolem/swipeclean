@@ -14,11 +14,38 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeApp();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Cuando la app regresa al primer plano (después de dar permisos en settings)
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissionAndLoad();
+    }
+  }
+
+  Future<void> _checkPermissionAndLoad() async {
+    final photoProvider = context.read<PhotoProvider>();
+    final trashProvider = context.read<TrashProvider>();
+
+    if (!photoProvider.hasPermission) {
+      final hasPermission = await photoProvider.checkAndRequestPermission();
+      if (hasPermission) {
+        trashProvider.loadTrash();
+      }
+    }
   }
 
   Future<void> _initializeApp() async {
@@ -87,7 +114,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           SizedBox(height: size.height * 0.04),
           ElevatedButton(
-            onPressed: () => _initializeApp(),
+            onPressed: () async {
+              await _initializeApp();
+              // Si después de solicitar permisos aún no tiene acceso, volver a verificar
+              if (mounted) {
+                await _checkPermissionAndLoad();
+              }
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF6C63FF),
               padding: EdgeInsets.symmetric(

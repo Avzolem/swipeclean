@@ -13,11 +13,21 @@ class SwipeCard extends StatelessWidget {
     this.swipeProgress = 0,
   });
 
+  void _showFullImage(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FullImageViewer(photo: photo),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFF16213E),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -31,39 +41,50 @@ class SwipeCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Photo
-            FutureBuilder<Uint8List?>(
-              future: photo.asset.thumbnailDataWithSize(
-                const ThumbnailSize(800, 800),
-                quality: 90,
-              ),
-              builder: (context, snapshot) {
-                if (snapshot.hasData && snapshot.data != null) {
-                  return Image.memory(
-                    snapshot.data!,
-                    fit: BoxFit.cover,
+            // Photo - ahora con BoxFit.contain para ver completa
+            GestureDetector(
+              onTap: () => _showFullImage(context),
+              child: FutureBuilder<Uint8List?>(
+                future: photo.asset.thumbnailDataWithSize(
+                  const ThumbnailSize(800, 800),
+                  quality: 90,
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    return Container(
+                      color: const Color(0xFF16213E),
+                      child: Image.memory(
+                        snapshot.data!,
+                        fit: BoxFit.contain,
+                      ),
+                    );
+                  }
+                  return Container(
+                    color: Colors.grey[800],
+                    child: const Center(
+                      child: CircularProgressIndicator(color: Colors.white54),
+                    ),
                   );
-                }
-                return Container(
-                  color: Colors.grey[800],
-                  child: const Center(
-                    child: CircularProgressIndicator(color: Colors.white54),
-                  ),
-                );
-              },
+                },
+              ),
             ),
 
-            // Gradient overlay
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.6),
-                  ],
-                  stops: const [0.6, 1.0],
+            // Gradient overlay para la info
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 100,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.7),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -94,6 +115,7 @@ class SwipeCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.red, width: 3),
                       borderRadius: BorderRadius.circular(8),
+                      color: Colors.black.withOpacity(0.3),
                     ),
                     child: const Text(
                       'ELIMINAR',
@@ -119,6 +141,7 @@ class SwipeCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.green, width: 3),
                       borderRadius: BorderRadius.circular(8),
+                      color: Colors.black.withOpacity(0.3),
                     ),
                     child: const Text(
                       'CONSERVAR',
@@ -131,6 +154,24 @@ class SwipeCard extends StatelessWidget {
                   ),
                 ),
               ),
+
+            // Tap hint icon
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.fullscreen,
+                  color: Colors.white70,
+                  size: 20,
+                ),
+              ),
+            ),
 
             // Photo info
             Positioned(
@@ -161,6 +202,79 @@ class SwipeCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final months = [
+      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+}
+
+// Visor de imagen a pantalla completa con zoom
+class FullImageViewer extends StatelessWidget {
+  final Photo photo;
+
+  const FullImageViewer({super.key, required this.photo});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          _formatDate(photo.createdAt),
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+        ),
+      ),
+      body: Center(
+        child: FutureBuilder<Uint8List?>(
+          future: photo.asset.originBytes,
+          builder: (context, snapshot) {
+            if (snapshot.hasData && snapshot.data != null) {
+              return InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.memory(
+                  snapshot.data!,
+                  fit: BoxFit.contain,
+                ),
+              );
+            }
+            // Mientras carga la imagen completa, mostrar thumbnail
+            return FutureBuilder<Uint8List?>(
+              future: photo.asset.thumbnailDataWithSize(
+                const ThumbnailSize(800, 800),
+                quality: 90,
+              ),
+              builder: (context, thumbSnapshot) {
+                if (thumbSnapshot.hasData && thumbSnapshot.data != null) {
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Image.memory(
+                        thumbSnapshot.data!,
+                        fit: BoxFit.contain,
+                      ),
+                      const CircularProgressIndicator(color: Colors.white),
+                    ],
+                  );
+                }
+                return const CircularProgressIndicator(color: Colors.white);
+              },
+            );
+          },
         ),
       ),
     );

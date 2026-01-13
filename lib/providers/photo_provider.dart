@@ -38,6 +38,17 @@ class PhotoProvider extends ChangeNotifier {
     return _hasPermission;
   }
 
+  Future<bool> checkAndRequestPermission() async {
+    // Primero verifica el estado actual del permiso
+    _hasPermission = await _photoService.requestPermission();
+    if (_hasPermission && _photos.isEmpty) {
+      // Si tiene permiso pero no ha cargado fotos, cargarlas
+      await loadPhotos();
+    }
+    notifyListeners();
+    return _hasPermission;
+  }
+
   Future<void> loadPhotos() async {
     _isLoading = true;
     _error = null;

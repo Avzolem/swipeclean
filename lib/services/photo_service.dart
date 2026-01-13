@@ -16,7 +16,8 @@ class PhotoService {
 
   Future<bool> requestPermission() async {
     final PermissionState permission = await PhotoManager.requestPermissionExtend();
-    return permission.isAuth;
+    // En Android 13+ el permiso puede ser "limited" que también es válido
+    return permission.isAuth || permission.hasAccess;
   }
 
   Future<void> loadAlbums() async {
