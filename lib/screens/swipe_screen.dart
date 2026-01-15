@@ -26,10 +26,26 @@ class _SwipeScreenState extends State<SwipeScreen> {
   // Estado para compartir
   bool _isSharing = false;
 
+  // Flag para prevenir rebuilds durante la salida
+  bool _isExiting = false;
+
+  // Fotos capturadas al momento de salir (para evitar flashazo)
+  List<Photo>? _frozenPhotos;
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Método centralizado para salir de la pantalla sin flashazo
+  void _exitScreen() {
+    setState(() {
+      _isExiting = true;
+      _frozenPhotos = context.read<PhotoProvider>().unreviewedPhotos;
+    });
+    context.read<PhotoProvider>().refresh();
+    Navigator.pop(context);
   }
 
   @override
@@ -41,6 +57,15 @@ class _SwipeScreenState extends State<SwipeScreen> {
       body: SafeArea(
         child: Consumer2<PhotoProvider, TrashProvider>(
           builder: (context, photoProvider, trashProvider, _) {
+            // Si estamos saliendo, usar fotos congeladas o mostrar empty state
+            if (_isExiting) {
+              if (_frozenPhotos == null || _frozenPhotos!.isEmpty) {
+                return _buildEmptyState(size);
+              }
+              // Mantener la UI congelada durante la transición de salida
+              return const SizedBox.shrink();
+            }
+
             final photos = photoProvider.unreviewedPhotos;
 
             if (photos.isEmpty) {
@@ -62,10 +87,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.arrow_back, color: Colors.white),
-                            onPressed: () {
-                              context.read<PhotoProvider>().refresh();
-                              Navigator.pop(context);
-                            },
+                            onPressed: _exitScreen,
                           ),
                           Expanded(
                             child: Center(
@@ -267,7 +289,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
             // Botón principal
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: _exitScreen,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6C63FF),
                 padding: EdgeInsets.symmetric(
@@ -335,6 +357,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
               setState(() {
                 _currentIndex = 0;
                 _actionHistory.clear();
+                _isExiting = false;
+                _frozenPhotos = null;
               });
             },
             child: Text(
@@ -351,6 +375,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
               setState(() {
                 _currentIndex = 0;
                 _actionHistory.clear();
+                _isExiting = false;
+                _frozenPhotos = null;
               });
             },
             style: ElevatedButton.styleFrom(
@@ -460,8 +486,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+              Navigator.pop(context); // Cierra el dialog
+              _exitScreen(); // Sale de SwipeScreen sin flashazo
             },
             child: Text('Volver al inicio', style: TextStyle(fontSize: size.width * 0.035)),
           ),
