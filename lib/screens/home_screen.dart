@@ -281,6 +281,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   Icons.delete,
                   const Color(0xFFFF5252),
                   size,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TrashScreen()),
+                  ),
                 ),
               ),
               SizedBox(width: size.width * 0.03),
@@ -458,8 +462,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color, Size size) {
-    return Container(
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+    Size size, {
+    VoidCallback? onTap,
+  }) {
+    final content = Container(
       padding: EdgeInsets.all(size.width * 0.04),
       decoration: BoxDecoration(
         color: color.withOpacity(0.15),
@@ -490,6 +501,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
     );
+
+    if (onTap != null) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: content,
+        ),
+      );
+    }
+
+    return content;
   }
 
   Widget _buildActionButton(
