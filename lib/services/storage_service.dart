@@ -11,11 +11,13 @@ class StorageService {
   static const String _reviewedBoxName = 'reviewed';
   static const String _hashBoxName = 'photo_hashes';
   static const String _duplicateBoxName = 'duplicate_results';
+  static const String _photoCacheBoxName = 'photo_cache';
 
   Box<TrashItem>? _trashBox;
   Box<String>? _reviewedBox;
   Box<PhotoHash>? _hashBox;
   Box<DuplicateResult>? _duplicateBox;
+  Box<dynamic>? _photoCacheBox;
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -34,6 +36,7 @@ class StorageService {
     _reviewedBox = await Hive.openBox<String>(_reviewedBoxName);
     _hashBox = await Hive.openBox<PhotoHash>(_hashBoxName);
     _duplicateBox = await Hive.openBox<DuplicateResult>(_duplicateBoxName);
+    _photoCacheBox = await Hive.openBox<dynamic>(_photoCacheBoxName);
   }
 
   // Trash operations
@@ -133,5 +136,36 @@ class StorageService {
 
   Future<void> clearDuplicateResults() async {
     await _duplicateBox?.clear();
+  }
+
+  // Photo cache operations - para carga rápida
+  Future<void> savePhotoCache(List<String> photoIds, int totalCount) async {
+    await _photoCacheBox?.put('photo_ids', photoIds);
+    await _photoCacheBox?.put('total_count', totalCount);
+    await _photoCacheBox?.put('cached_at', DateTime.now().millisecondsSinceEpoch);
+  }
+
+  List<String>? getCachedPhotoIds() {
+    final ids = _photoCacheBox?.get('photo_ids');
+    if (ids == null) return null;
+    return List<String>.from(ids);
+  }
+
+  int? getCachedPhotoCount() {
+    return _photoCacheBox?.get('total_count');
+  }
+
+  int? getCacheTimestamp() {
+    return _photoCacheBox?.get('cached_at');
+  }
+
+  bool hasValidCache() {
+    final ids = _photoCacheBox?.get('photo_ids');
+    final count = _photoCacheBox?.get('total_count');
+    return ids != null && count != null;
+  }
+
+  Future<void> clearPhotoCache() async {
+    await _photoCacheBox?.clear();
   }
 }

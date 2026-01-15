@@ -18,11 +18,16 @@ class PhotoProvider extends ChangeNotifier {
   String? _error;
   int _currentIndex = 0;
 
+  // Para carga optimizada
+  bool _isLoadingMore = false;
+  int _totalPhotoCount = 0;
+
   List<Photo> get photos => _photos;
   List<Photo> get unreviewedPhotos => _unreviewedPhotos;
   List<AssetPathEntity> get albums => _albums;
   AssetPathEntity? get selectedAlbum => _selectedAlbum;
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
   bool get hasPermission => _hasPermission;
   String? get error => _error;
   int get currentIndex => _currentIndex;
@@ -30,7 +35,7 @@ class PhotoProvider extends ChangeNotifier {
       _unreviewedPhotos.isNotEmpty && _currentIndex < _unreviewedPhotos.length
           ? _unreviewedPhotos[_currentIndex]
           : null;
-  int get totalPhotos => _photos.length;
+  int get totalPhotos => _totalPhotoCount > 0 ? _totalPhotoCount : _photos.length;
   int get remainingPhotos => _unreviewedPhotos.length - _currentIndex;
 
   /// Verifica permisos rápidamente sin mostrar diálogo
@@ -85,15 +90,112 @@ class PhotoProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _photoService.loadAllPhotos();
-      _photos = _photoService.allPhotos;
+      // 1. Obtener conteo actual (muy rápido: ~100ms)
+      final currentCount = await _photoService.getPhotoCount();
+      _totalPhotoCount = currentCount;
       _albums = _photoService.albums;
-      _filterUnreviewedPhotos();
+
+      // 2. Verificar si el caché es válido
+      final cachedCount = _storageService.getCachedPhotoCount();
+      final cachedIds = _storageService.getCachedPhotoIds();
+
+      if (cachedCount != null && cachedIds != null && cachedCount == currentCount) {
+        // Caché válido - cargar primeras 100 fotos para mostrar UI rápido
+        _isLoading = false;
+        notifyListeners();
+
+        // Cargar primeras fotos para UI inmediata
+        final firstBatch = await _photoService.loadPhotosPaginated(start: 0, end: 100);
+        _photos = firstBatch;
+        _filterUnreviewedPhotos();
+        notifyListeners();
+
+        // Cargar resto en background
+        if (currentCount > 100) {
+          _loadRemainingPhotos(100, currentCount);
+        }
+      } else {
+        // Caché inválido o inexistente - carga inicial
+        // Cargar primeras 100 fotos primero
+        final firstBatch = await _photoService.loadPhotosPaginated(start: 0, end: 100);
+        _photos = firstBatch;
+        _isLoading = false;
+        _filterUnreviewedPhotos();
+        notifyListeners();
+
+        // Cargar resto y actualizar caché en background
+        if (currentCount > 100) {
+          _loadRemainingPhotosAndCache(100, currentCount);
+        } else {
+          // Pocas fotos, guardar caché directamente
+          final ids = _photos.map((p) => p.id).toList();
+          await _storageService.savePhotoCache(ids, currentCount);
+          _photoService.setPhotos(_photos);
+        }
+      }
     } catch (e) {
       _error = 'Error al cargar fotos: $e';
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Carga fotos restantes en background (cuando caché es válido)
+  Future<void> _loadRemainingPhotos(int start, int total) async {
+    _isLoadingMore = true;
+
+    try {
+      const batchSize = 500;
+      int current = start;
+
+      while (current < total) {
+        final end = (current + batchSize > total) ? total : current + batchSize;
+        final batch = await _photoService.loadPhotosPaginated(start: current, end: end);
+
+        _photos = [..._photos, ...batch];
+        _filterUnreviewedPhotos();
+        notifyListeners();
+
+        current = end;
+      }
+
+      _photoService.setPhotos(_photos);
+    } catch (e) {
+      debugPrint('Error cargando fotos restantes: $e');
     }
 
-    _isLoading = false;
+    _isLoadingMore = false;
+    notifyListeners();
+  }
+
+  /// Carga fotos restantes y actualiza caché (cuando caché es inválido)
+  Future<void> _loadRemainingPhotosAndCache(int start, int total) async {
+    _isLoadingMore = true;
+
+    try {
+      const batchSize = 500;
+      int current = start;
+
+      while (current < total) {
+        final end = (current + batchSize > total) ? total : current + batchSize;
+        final batch = await _photoService.loadPhotosPaginated(start: current, end: end);
+
+        _photos = [..._photos, ...batch];
+        _filterUnreviewedPhotos();
+        notifyListeners();
+
+        current = end;
+      }
+
+      // Guardar caché actualizado
+      final ids = _photos.map((p) => p.id).toList();
+      await _storageService.savePhotoCache(ids, total);
+      _photoService.setPhotos(_photos);
+    } catch (e) {
+      debugPrint('Error cargando fotos: $e');
+    }
+
+    _isLoadingMore = false;
     notifyListeners();
   }
 
