@@ -166,9 +166,9 @@ class _SwipeScreenState extends State<SwipeScreen> {
                               trashProvider.undoKeepPhoto(lastAction.photoId);
                             }
 
-                            // Actualizar índice actual (volvemos al anterior)
+                            // Actualizar índice actual (volvemos a la tarjeta restaurada)
                             setState(() {
-                              _currentIndex = previousIndex ?? 0;
+                              _currentIndex = currentIndex;
                             });
 
                             // NO llamar refresh() aquí - el CardSwiper ya restauró la tarjeta
