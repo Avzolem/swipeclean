@@ -52,9 +52,15 @@ class _SwipeScreenState extends State<SwipeScreen> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
-      body: SafeArea(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _exitScreen();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1A1A2E),
+        body: SafeArea(
         child: Consumer2<PhotoProvider, TrashProvider>(
           builder: (context, photoProvider, trashProvider, _) {
             // Si estamos saliendo, usar fotos congeladas o mostrar empty state
@@ -239,7 +245,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
           },
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildEmptyState(Size size) {
