@@ -35,10 +35,26 @@ class TrashProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> undoKeepPhoto(String photoId) async {
+    await _storageService.unmarkAsReviewed(photoId);
+    notifyListeners();
+  }
+
   Future<void> restoreFromTrash(String photoId) async {
     await _storageService.removeFromTrash(photoId);
     await _storageService.unmarkAsReviewed(photoId);
     loadTrash();
+  }
+
+  /// Método específico para deshacer la acción de agregar a papelera
+  /// No dispara notifyListeners para evitar rebuilds prematuros del CardSwiper
+  Future<void> undoAddToTrash(String photoId) async {
+    await _storageService.removeFromTrash(photoId);
+    await _storageService.unmarkAsReviewed(photoId);
+    // Actualizar lista local sin notificar
+    _trashItems = _storageService.getTrashItems();
+    _trashItems.sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    // NO llamar notifyListeners aquí - el CardSwiper manejará el estado
   }
 
   Future<int> restoreSelected() async {
@@ -107,4 +123,19 @@ class TrashProvider extends ChangeNotifier {
   }
 
   int get reviewedCount => _storageService.reviewedCount;
+
+  /// Reinicia el proceso de limpieza (borra historial de revisadas, NO la papelera)
+  Future<void> resetReviewProgress() async {
+    await _storageService.clearReviewed();
+    notifyListeners();
+  }
+
+  /// Reinicia todo (revisadas + papelera)
+  Future<void> resetAll() async {
+    await _storageService.clearReviewed();
+    await _storageService.clearTrash();
+    _trashItems = [];
+    _selectedItems.clear();
+    notifyListeners();
+  }
 }

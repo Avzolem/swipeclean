@@ -3,21 +3,162 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../models/photo.dart';
 
-class SwipeCard extends StatelessWidget {
+/// Caché global de imágenes precargadas
+class ImagePreloadCache {
+  static final ImagePreloadCache _instance = ImagePreloadCache._internal();
+  factory ImagePreloadCache() => _instance;
+  ImagePreloadCache._internal();
+
+  final Map<String, Uint8List> _cache = {};
+  final Set<String> _loadingIds = {};
+  static const int _maxCacheSize = 10; // Máximo de imágenes en caché
+
+  /// Obtiene una imagen del caché o null si no está
+  Uint8List? get(String photoId) => _cache[photoId];
+
+  /// Verifica si una imagen está en caché
+  bool has(String photoId) => _cache.containsKey(photoId);
+
+  /// Verifica si una imagen está cargándose
+  bool isLoading(String photoId) => _loadingIds.contains(photoId);
+
+  /// Guarda una imagen en el caché
+  void put(String photoId, Uint8List data) {
+    // Limpiar caché si es muy grande
+    if (_cache.length >= _maxCacheSize) {
+      final keysToRemove = _cache.keys.take(_cache.length - _maxCacheSize + 1).toList();
+      for (final key in keysToRemove) {
+        _cache.remove(key);
+      }
+    }
+    _cache[photoId] = data;
+    _loadingIds.remove(photoId);
+  }
+
+  /// Precarga múltiples fotos
+  Future<void> preloadPhotos(List<Photo> photos, {int count = 3}) async {
+    for (int i = 0; i < count && i < photos.length; i++) {
+      final photo = photos[i];
+      if (!has(photo.id) && !isLoading(photo.id)) {
+        _loadingIds.add(photo.id);
+        _loadPhoto(photo);
+      }
+    }
+  }
+
+  /// Carga una foto individual
+  Future<void> _loadPhoto(Photo photo) async {
+    try {
+      final data = await photo.asset.thumbnailDataWithSize(
+        const ThumbnailSize(800, 800),
+        quality: 90,
+      );
+      if (data != null) {
+        put(photo.id, data);
+      } else {
+        _loadingIds.remove(photo.id);
+      }
+    } catch (e) {
+      _loadingIds.remove(photo.id);
+    }
+  }
+
+  /// Limpia el caché
+  void clear() {
+    _cache.clear();
+    _loadingIds.clear();
+  }
+
+  /// Remueve una foto específica del caché
+  void remove(String photoId) {
+    _cache.remove(photoId);
+  }
+}
+
+class SwipeCard extends StatefulWidget {
   final Photo photo;
   final double swipeProgress;
+  final List<Photo>? nextPhotos; // Fotos siguientes para precargar
 
   const SwipeCard({
     super.key,
     required this.photo,
     this.swipeProgress = 0,
+    this.nextPhotos,
   });
+
+  @override
+  State<SwipeCard> createState() => _SwipeCardState();
+}
+
+class _SwipeCardState extends State<SwipeCard> {
+  final ImagePreloadCache _cache = ImagePreloadCache();
+  Uint8List? _imageData;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImage();
+    _preloadNextPhotos();
+  }
+
+  @override
+  void didUpdateWidget(SwipeCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Solo recargar si cambia la foto
+    if (oldWidget.photo.id != widget.photo.id) {
+      _loadImage();
+      _preloadNextPhotos();
+    }
+  }
+
+  void _preloadNextPhotos() {
+    if (widget.nextPhotos != null && widget.nextPhotos!.isNotEmpty) {
+      _cache.preloadPhotos(widget.nextPhotos!, count: 3);
+    }
+  }
+
+  Future<void> _loadImage() async {
+    // Verificar caché primero
+    final cachedData = _cache.get(widget.photo.id);
+    if (cachedData != null) {
+      setState(() {
+        _imageData = cachedData;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final data = await widget.photo.asset.thumbnailDataWithSize(
+        const ThumbnailSize(800, 800),
+        quality: 90,
+      );
+
+      if (mounted) {
+        if (data != null) {
+          _cache.put(widget.photo.id, data);
+        }
+        setState(() {
+          _imageData = data;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   void _showFullImage(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FullImageViewer(photo: photo),
+        builder: (context) => FullImageViewer(photo: widget.photo),
       ),
     );
   }
@@ -41,31 +182,28 @@ class SwipeCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Photo - ahora con BoxFit.contain para ver completa
+            // Photo - cacheada para evitar parpadeo
             GestureDetector(
               onTap: () => _showFullImage(context),
-              child: FutureBuilder<Uint8List?>(
-                future: photo.asset.thumbnailDataWithSize(
-                  const ThumbnailSize(800, 800),
-                  quality: 90,
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.hasData && snapshot.data != null) {
-                    return Container(
-                      color: const Color(0xFF16213E),
-                      child: Image.memory(
-                        snapshot.data!,
-                        fit: BoxFit.contain,
-                      ),
-                    );
-                  }
-                  return Container(
-                    color: Colors.grey[800],
-                    child: const Center(
-                      child: CircularProgressIndicator(color: Colors.white54),
-                    ),
-                  );
-                },
+              child: Container(
+                color: const Color(0xFF16213E),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Colors.white54),
+                      )
+                    : _imageData != null
+                        ? Image.memory(
+                            _imageData!,
+                            fit: BoxFit.contain,
+                            gaplessPlayback: true, // Evita parpadeo
+                          )
+                        : const Center(
+                            child: Icon(
+                              Icons.broken_image,
+                              color: Colors.white54,
+                              size: 48,
+                            ),
+                          ),
               ),
             ),
 
@@ -90,13 +228,13 @@ class SwipeCard extends StatelessWidget {
             ),
 
             // Swipe indicators
-            if (swipeProgress != 0)
+            if (widget.swipeProgress != 0)
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: swipeProgress < 0 ? Colors.red : Colors.green,
+                      color: widget.swipeProgress < 0 ? Colors.red : Colors.green,
                       width: 4,
                     ),
                   ),
@@ -104,7 +242,7 @@ class SwipeCard extends StatelessWidget {
               ),
 
             // Delete indicator (left swipe)
-            if (swipeProgress < -0.1)
+            if (widget.swipeProgress < -0.1)
               Positioned(
                 top: 40,
                 right: 20,
@@ -130,7 +268,7 @@ class SwipeCard extends StatelessWidget {
               ),
 
             // Keep indicator (right swipe)
-            if (swipeProgress > 0.1)
+            if (widget.swipeProgress > 0.1)
               Positioned(
                 top: 40,
                 left: 20,
@@ -183,16 +321,16 @@ class SwipeCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _formatDate(photo.createdAt),
+                    _formatDate(widget.photo.createdAt),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (photo.albumName != null)
+                  if (widget.photo.albumName != null)
                     Text(
-                      photo.albumName!,
+                      widget.photo.albumName!,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.7),
                         fontSize: 14,
@@ -249,6 +387,7 @@ class FullImageViewer extends StatelessWidget {
                 child: Image.memory(
                   snapshot.data!,
                   fit: BoxFit.contain,
+                  gaplessPlayback: true,
                 ),
               );
             }
@@ -266,6 +405,7 @@ class FullImageViewer extends StatelessWidget {
                       Image.memory(
                         thumbSnapshot.data!,
                         fit: BoxFit.contain,
+                        gaplessPlayback: true,
                       ),
                       const CircularProgressIndicator(color: Colors.white),
                     ],

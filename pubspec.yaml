@@ -18,7 +18,7 @@ dependencies:
   permission_handler: ^11.3.0
   path_provider: ^2.1.2
   image: ^4.1.7
-  flutter_native_splash: ^2.3.10
+  share_plus: ^7.2.2
 
 dev_dependencies:
   flutter_test:
@@ -41,11 +41,3 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "assets/icon_full.png"
   min_sdk_android: 21
 
-flutter_native_splash:
-  color: "#1A1A2E"
-  image: assets/icon_full.png
-  android: true
-  ios: true
-  android_12:
-    color: "#1A1A2E"
-    image: assets/icon_full.png

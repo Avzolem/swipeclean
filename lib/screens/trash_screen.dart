@@ -1,15 +1,64 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../providers/trash_provider.dart';
 import '../providers/photo_provider.dart';
+import '../widgets/lazy_thumbnail.dart';
 
-class TrashScreen extends StatelessWidget {
+class TrashScreen extends StatefulWidget {
   const TrashScreen({super.key});
 
   @override
+  State<TrashScreen> createState() => _TrashScreenState();
+}
+
+class _TrashScreenState extends State<TrashScreen> {
+  int _estimatedSpaceBytes = 0;
+  bool _isCalculatingSpace = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _calculateSpace();
+  }
+
+  Future<void> _calculateSpace() async {
+    final trashProvider = context.read<TrashProvider>();
+    int totalBytes = 0;
+
+    for (final item in trashProvider.trashItems) {
+      try {
+        final asset = await AssetEntity.fromId(item.photoId);
+        if (asset != null) {
+          // Usar dimensiones como aproximación del tamaño
+          totalBytes += (asset.width * asset.height * 0.5).toInt();
+        }
+      } catch (e) {
+        // Ignorar errores
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _estimatedSpaceBytes = totalBytes;
+        _isCalculatingSpace = false;
+      });
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
@@ -49,11 +98,89 @@ class TrashScreen extends StatelessWidget {
       body: Consumer<TrashProvider>(
         builder: (context, trashProvider, _) {
           if (trashProvider.trashCount == 0) {
-            return _buildEmptyState();
+            return _buildEmptyState(size);
           }
 
           return Column(
             children: [
+              // Header con estadísticas
+              Container(
+                padding: EdgeInsets.all(size.width * 0.04),
+                color: const Color(0xFF16213E),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_sweep,
+                      color: Colors.red.withOpacity(0.8),
+                      size: size.width * 0.06,
+                    ),
+                    SizedBox(width: size.width * 0.03),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${trashProvider.trashCount} fotos en papelera',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: size.width * 0.038,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Selecciona para restaurar o eliminar',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.6),
+                              fontSize: size.width * 0.03,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: size.width * 0.025,
+                        vertical: size.height * 0.008,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: [
+                          if (_isCalculatingSpace)
+                            SizedBox(
+                              width: size.width * 0.04,
+                              height: size.width * 0.04,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.green,
+                              ),
+                            )
+                          else
+                            Text(
+                              '~${_formatBytes(_estimatedSpaceBytes)}',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: size.width * 0.035,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          Text(
+                            'a liberar',
+                            style: TextStyle(
+                              color: Colors.green.withOpacity(0.7),
+                              fontSize: size.width * 0.025,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Grid de fotos
               Expanded(
                 child: GridView.builder(
                   padding: const EdgeInsets.all(12),
@@ -63,6 +190,7 @@ class TrashScreen extends StatelessWidget {
                     mainAxisSpacing: 4,
                   ),
                   itemCount: trashProvider.trashItems.length,
+                  cacheExtent: 500,
                   itemBuilder: (context, index) {
                     final item = trashProvider.trashItems[index];
                     final isSelected = trashProvider.selectedItems.contains(item.photoId);
@@ -77,19 +205,10 @@ class TrashScreen extends StatelessWidget {
                             fit: StackFit.expand,
                             children: [
                               if (snapshot.hasData && snapshot.data != null)
-                                FutureBuilder<Uint8List?>(
-                                  future: snapshot.data!.thumbnailDataWithSize(
-                                    const ThumbnailSize(300, 300),
-                                  ),
-                                  builder: (context, thumbSnapshot) {
-                                    if (thumbSnapshot.hasData) {
-                                      return Image.memory(
-                                        thumbSnapshot.data!,
-                                        fit: BoxFit.cover,
-                                      );
-                                    }
-                                    return Container(color: Colors.grey[800]);
-                                  },
+                                LazyThumbnail(
+                                  asset: snapshot.data!,
+                                  size: 300,
+                                  fit: BoxFit.cover,
                                 )
                               else
                                 Container(
@@ -141,96 +260,7 @@ class TrashScreen extends StatelessWidget {
 
               // Bottom action bar
               if (trashProvider.trashCount > 0)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF16213E),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, -5),
-                      ),
-                    ],
-                  ),
-                  child: SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                trashProvider.hasSelection
-                                    ? '${trashProvider.selectedCount} seleccionadas'
-                                    : 'Selecciona fotos para restaurar o eliminar',
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (trashProvider.hasSelection)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Row(
-                              children: [
-                                // Botón Restaurar
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: trashProvider.isDeleting
-                                        ? null
-                                        : () => _confirmRestore(context, trashProvider),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
-                                    icon: const Icon(Icons.restore, color: Colors.white),
-                                    label: const Text(
-                                      'Restaurar',
-                                      style: TextStyle(color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // Botón Eliminar
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: trashProvider.isDeleting
-                                        ? null
-                                        : () => _confirmDelete(context, trashProvider),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
-                                    icon: trashProvider.isDeleting
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.delete_forever, color: Colors.white),
-                                    label: const Text(
-                                      'Eliminar',
-                                      style: TextStyle(color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
+                _buildBottomBar(context, trashProvider, size),
             ],
           );
         },
@@ -238,37 +268,172 @@ class TrashScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.delete_outline,
-            size: 80,
-            color: Colors.white.withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Papelera vacía',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Las fotos que marques para eliminar aparecerán aquí',
-            style: TextStyle(color: Colors.white.withOpacity(0.6)),
-            textAlign: TextAlign.center,
+  Widget _buildBottomBar(BuildContext context, TrashProvider trashProvider, Size size) {
+    return Container(
+      padding: EdgeInsets.all(size.width * 0.04),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16213E),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
           ),
         ],
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    trashProvider.hasSelection
+                        ? '${trashProvider.selectedCount} seleccionadas'
+                        : 'Selecciona fotos',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: size.width * 0.035,
+                    ),
+                  ),
+                ),
+                if (trashProvider.hasSelection && !_isCalculatingSpace)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: size.width * 0.02,
+                      vertical: size.height * 0.005,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '~${_formatBytes(_calculateSelectedSpace(trashProvider))}',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontSize: size.width * 0.03,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (trashProvider.hasSelection)
+              Padding(
+                padding: EdgeInsets.only(top: size.height * 0.015),
+                child: Row(
+                  children: [
+                    // Botón Restaurar
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: trashProvider.isDeleting
+                            ? null
+                            : () => _confirmRestore(context, trashProvider),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: EdgeInsets.symmetric(vertical: size.height * 0.015),
+                        ),
+                        icon: const Icon(Icons.restore, color: Colors.white),
+                        label: Text(
+                          'Restaurar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: size.width * 0.035,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: size.width * 0.03),
+                    // Botón Eliminar
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: trashProvider.isDeleting
+                            ? null
+                            : () => _confirmDelete(context, trashProvider),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: EdgeInsets.symmetric(vertical: size.height * 0.015),
+                        ),
+                        icon: trashProvider.isDeleting
+                            ? SizedBox(
+                                width: size.width * 0.04,
+                                height: size.width * 0.04,
+                                child: const CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.delete_forever, color: Colors.white),
+                        label: Text(
+                          'Eliminar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: size.width * 0.035,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _calculateSelectedSpace(TrashProvider provider) {
+    // Aproximación simple basada en la proporción de fotos seleccionadas
+    if (provider.trashCount == 0) return 0;
+    return (_estimatedSpaceBytes * provider.selectedCount) ~/ provider.trashCount;
+  }
+
+  Widget _buildEmptyState(Size size) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(size.width * 0.08),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.delete_outline,
+              size: size.width * 0.2,
+              color: Colors.white.withOpacity(0.3),
+            ),
+            SizedBox(height: size.height * 0.02),
+            Text(
+              'Papelera vacía',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: size.width * 0.05,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: size.height * 0.01),
+            Text(
+              'Las fotos que marques para eliminar aparecerán aquí',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: size.width * 0.035,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _showItemOptions(BuildContext context, String photoId, TrashProvider provider) {
+    final size = MediaQuery.of(context).size;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF16213E),
@@ -276,7 +441,7 @@ class TrashScreen extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(size.width * 0.05),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -291,6 +456,7 @@ class TrashScreen extends StatelessWidget {
                 provider.restoreFromTrash(photoId);
                 context.read<PhotoProvider>().refresh();
                 Navigator.pop(context);
+                _calculateSpace(); // Recalcular espacio
               },
             ),
             ListTile(
@@ -313,18 +479,20 @@ class TrashScreen extends StatelessWidget {
   }
 
   void _confirmRestore(BuildContext context, TrashProvider provider) {
+    final size = MediaQuery.of(context).size;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF16213E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
+        title: Text(
           '¿Restaurar fotos?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white, fontSize: size.width * 0.045),
         ),
         content: Text(
           'Se restaurarán ${provider.selectedCount} fotos y volverán a aparecer en la cola de revisión.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: Colors.white70, fontSize: size.width * 0.035),
         ),
         actions: [
           TextButton(
@@ -337,10 +505,13 @@ class TrashScreen extends StatelessWidget {
               final restoredCount = await provider.restoreSelected();
               if (context.mounted) {
                 context.read<PhotoProvider>().refresh();
+                _calculateSpace(); // Recalcular espacio
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('$restoredCount fotos restauradas'),
                     backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 );
               }
@@ -354,18 +525,58 @@ class TrashScreen extends StatelessWidget {
   }
 
   void _confirmDelete(BuildContext context, TrashProvider provider) {
+    final size = MediaQuery.of(context).size;
+    final spaceToFree = _calculateSelectedSpace(provider);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF16213E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
+        title: Text(
           '¿Eliminar fotos?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white, fontSize: size.width * 0.045),
         ),
-        content: Text(
-          'Se eliminarán ${provider.selectedCount} fotos permanentemente de tu dispositivo. Esta acción no se puede deshacer.',
-          style: const TextStyle(color: Colors.white70),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Se eliminarán ${provider.selectedCount} fotos permanentemente de tu dispositivo.',
+              style: TextStyle(color: Colors.white70, fontSize: size.width * 0.035),
+            ),
+            SizedBox(height: size.height * 0.015),
+            Container(
+              padding: EdgeInsets.all(size.width * 0.03),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.storage, color: Colors.green, size: size.width * 0.05),
+                  SizedBox(width: size.width * 0.02),
+                  Text(
+                    'Liberarás ~${_formatBytes(spaceToFree)}',
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontSize: size.width * 0.035,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: size.height * 0.01),
+            Text(
+              'Esta acción no se puede deshacer.',
+              style: TextStyle(
+                color: Colors.red.withOpacity(0.8),
+                fontSize: size.width * 0.03,
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -377,12 +588,17 @@ class TrashScreen extends StatelessWidget {
               Navigator.pop(context);
               final success = await provider.deleteSelected();
               if (context.mounted) {
+                _calculateSpace(); // Recalcular espacio
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      success ? 'Fotos eliminadas' : 'Error al eliminar',
+                      success
+                          ? 'Fotos eliminadas - ${_formatBytes(spaceToFree)} liberados'
+                          : 'Error al eliminar',
                     ),
                     backgroundColor: success ? Colors.green : Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 );
               }

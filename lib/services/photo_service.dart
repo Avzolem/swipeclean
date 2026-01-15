@@ -1,4 +1,5 @@
 import 'package:photo_manager/photo_manager.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/photo.dart';
 
 class PhotoService {
@@ -14,10 +15,89 @@ class PhotoService {
   List<Photo> get allPhotos => _allPhotos;
   bool get isInitialized => _isInitialized;
 
+  /// Solicita permisos de galería con soporte especial para MIUI/Xiaomi
   Future<bool> requestPermission() async {
-    final PermissionState permission = await PhotoManager.requestPermissionExtend();
-    // En Android 13+ el permiso puede ser "limited" que también es válido
-    return permission.isAuth || permission.hasAccess;
+    // Primero intentar con photo_manager
+    final PermissionState pmPermission = await PhotoManager.requestPermissionExtend();
+
+    // Verificar todos los estados válidos de photo_manager
+    if (pmPermission.isAuth || pmPermission.hasAccess) {
+      return true;
+    }
+
+    // Si photo_manager falla, intentar con permission_handler
+    // Esto es especialmente útil para MIUI/Xiaomi
+    PermissionStatus status;
+
+    // En Android 13+ se usa READ_MEDIA_IMAGES
+    if (await Permission.photos.status.isDenied) {
+      status = await Permission.photos.request();
+      if (status.isGranted || status.isLimited) {
+        // Dar tiempo a MIUI para procesar el permiso
+        await Future.delayed(const Duration(milliseconds: 500));
+        // Verificar de nuevo con photo_manager
+        final recheckPermission = await PhotoManager.requestPermissionExtend();
+        return recheckPermission.isAuth || recheckPermission.hasAccess;
+      }
+    }
+
+    // Intentar con storage para Android < 13
+    if (await Permission.storage.status.isDenied) {
+      status = await Permission.storage.request();
+      if (status.isGranted) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        final recheckPermission = await PhotoManager.requestPermissionExtend();
+        return recheckPermission.isAuth || recheckPermission.hasAccess;
+      }
+    }
+
+    // Último intento: verificar si ya tenemos acceso aunque el estado diga lo contrario
+    // Esto es común en MIUI donde el estado puede no actualizarse correctamente
+    try {
+      final testAlbums = await PhotoManager.getAssetPathList(
+        type: RequestType.image,
+        hasAll: true,
+      );
+      if (testAlbums.isNotEmpty) {
+        return true;
+      }
+    } catch (e) {
+      // Ignorar error, significa que realmente no tenemos permiso
+    }
+
+    return false;
+  }
+
+  /// Verifica si tenemos permiso sin solicitarlo
+  Future<bool> checkPermission() async {
+    final PermissionState pmPermission = await PhotoManager.requestPermissionExtend(
+      requestOption: const PermissionRequestOption(
+        androidPermission: AndroidPermission(
+          type: RequestType.image,
+          mediaLocation: false,
+        ),
+      ),
+    );
+
+    if (pmPermission.isAuth || pmPermission.hasAccess) {
+      return true;
+    }
+
+    // Verificación adicional intentando acceder a los álbumes
+    try {
+      final testAlbums = await PhotoManager.getAssetPathList(
+        type: RequestType.image,
+        hasAll: true,
+      );
+      return testAlbums.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Abre la configuración de la app para que el usuario otorgue permisos manualmente
+  Future<bool> openSettings() async {
+    return await openAppSettings();
   }
 
   Future<void> loadAlbums() async {

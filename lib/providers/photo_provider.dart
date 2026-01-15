@@ -14,6 +14,7 @@ class PhotoProvider extends ChangeNotifier {
   AssetPathEntity? _selectedAlbum;
   bool _isLoading = false;
   bool _hasPermission = false;
+  bool _permissionChecked = false;
   String? _error;
   int _currentIndex = 0;
 
@@ -32,17 +33,46 @@ class PhotoProvider extends ChangeNotifier {
   int get totalPhotos => _photos.length;
   int get remainingPhotos => _unreviewedPhotos.length - _currentIndex;
 
+  /// Verifica permisos rápidamente sin mostrar diálogo
+  Future<bool> quickCheckPermission() async {
+    // Si ya verificamos y tenemos permiso, no volver a verificar
+    if (_permissionChecked && _hasPermission) {
+      return true;
+    }
+
+    // Si ya tenemos fotos cargadas, asumimos que tenemos permiso
+    if (_photoService.isInitialized && _photos.isNotEmpty) {
+      _hasPermission = true;
+      _permissionChecked = true;
+      return true;
+    }
+
+    // Verificar sin solicitar (rápido)
+    _hasPermission = await _photoService.checkPermission();
+    _permissionChecked = true;
+    notifyListeners();
+    return _hasPermission;
+  }
+
   Future<bool> requestPermission() async {
     _hasPermission = await _photoService.requestPermission();
+    _permissionChecked = true;
     notifyListeners();
     return _hasPermission;
   }
 
   Future<bool> checkAndRequestPermission() async {
-    // Primero verifica el estado actual del permiso
-    _hasPermission = await _photoService.requestPermission();
+    // Primero verificar sin solicitar
+    _hasPermission = await _photoService.checkPermission();
+
+    if (!_hasPermission) {
+      // Solo solicitar si realmente no tenemos permiso
+      _hasPermission = await _photoService.requestPermission();
+    }
+
+    _permissionChecked = true;
+
     if (_hasPermission && _photos.isEmpty) {
-      // Si tiene permiso pero no ha cargado fotos, cargarlas
       await loadPhotos();
     }
     notifyListeners();

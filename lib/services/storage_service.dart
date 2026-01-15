@@ -1,5 +1,6 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/trash_item.dart';
+import '../models/photo_hash.dart';
 
 class StorageService {
   static final StorageService _instance = StorageService._internal();
@@ -8,9 +9,13 @@ class StorageService {
 
   static const String _trashBoxName = 'trash';
   static const String _reviewedBoxName = 'reviewed';
+  static const String _hashBoxName = 'photo_hashes';
+  static const String _duplicateBoxName = 'duplicate_results';
 
   Box<TrashItem>? _trashBox;
   Box<String>? _reviewedBox;
+  Box<PhotoHash>? _hashBox;
+  Box<DuplicateResult>? _duplicateBox;
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -18,9 +23,17 @@ class StorageService {
     if (!Hive.isAdapterRegistered(0)) {
       Hive.registerAdapter(TrashItemAdapter());
     }
+    if (!Hive.isAdapterRegistered(1)) {
+      Hive.registerAdapter(PhotoHashAdapter());
+    }
+    if (!Hive.isAdapterRegistered(2)) {
+      Hive.registerAdapter(DuplicateResultAdapter());
+    }
 
     _trashBox = await Hive.openBox<TrashItem>(_trashBoxName);
     _reviewedBox = await Hive.openBox<String>(_reviewedBoxName);
+    _hashBox = await Hive.openBox<PhotoHash>(_hashBoxName);
+    _duplicateBox = await Hive.openBox<DuplicateResult>(_duplicateBoxName);
   }
 
   // Trash operations
@@ -73,5 +86,52 @@ class StorageService {
   // Get unreviewed photos
   List<String> getReviewedPhotoIds() {
     return _reviewedBox?.values.toList() ?? [];
+  }
+
+  // Hash operations
+  Future<void> saveHash(String photoId, int hash, int size) async {
+    final item = PhotoHash(
+      photoId: photoId,
+      hash: hash,
+      size: size,
+      calculatedAt: DateTime.now(),
+    );
+    await _hashBox?.put(photoId, item);
+  }
+
+  PhotoHash? getHash(String photoId) {
+    return _hashBox?.get(photoId);
+  }
+
+  Map<String, PhotoHash> getAllHashes() {
+    final map = <String, PhotoHash>{};
+    _hashBox?.toMap().forEach((key, value) {
+      map[key.toString()] = value;
+    });
+    return map;
+  }
+
+  int get hashCount => _hashBox?.length ?? 0;
+
+  Future<void> clearHashes() async {
+    await _hashBox?.clear();
+  }
+
+  // Duplicate results operations
+  Future<void> saveDuplicateResult(List<List<String>> groups, int totalPhotos) async {
+    final result = DuplicateResult(
+      groups: groups,
+      scannedAt: DateTime.now(),
+      totalPhotosAnalyzed: totalPhotos,
+    );
+    await _duplicateBox?.put('latest', result);
+  }
+
+  DuplicateResult? getLastDuplicateResult() {
+    return _duplicateBox?.get('latest');
+  }
+
+  Future<void> clearDuplicateResults() async {
+    await _duplicateBox?.clear();
   }
 }
