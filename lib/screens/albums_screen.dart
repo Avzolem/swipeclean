@@ -18,8 +18,12 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
   bool _isLoadingAlbum = false;
   String? _loadingAlbumId;
 
+  // Cola de carga escalonada
+  final Map<String, _AlbumInfo> _albumInfoCache = {};
+  final List<String> _loadQueue = [];
+  bool _isProcessingQueue = false;
+
   Future<void> _onAlbumTap(AssetPathEntity album, PhotoProvider provider) async {
-    // Prevenir múltiples taps mientras se carga
     if (_isLoadingAlbum) return;
 
     setState(() {
@@ -45,6 +49,63 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
         });
       }
     }
+  }
+
+  /// Encola un álbum para cargar su info
+  void _enqueueAlbumLoad(AssetPathEntity album) {
+    if (_albumInfoCache.containsKey(album.id)) return;
+    if (_loadQueue.contains(album.id)) return;
+
+    _loadQueue.add(album.id);
+    _processQueue();
+  }
+
+  /// Procesa la cola de carga de forma escalonada
+  Future<void> _processQueue() async {
+    if (_isProcessingQueue) return;
+    _isProcessingQueue = true;
+
+    // Capturar provider antes del loop async
+    final provider = context.read<PhotoProvider>();
+
+    while (_loadQueue.isNotEmpty && mounted) {
+      final albumId = _loadQueue.removeAt(0);
+
+      // Buscar el álbum
+      final album = provider.albums.firstWhere(
+        (a) => a.id == albumId,
+        orElse: () => provider.albums.first,
+      );
+
+      if (album.id != albumId) continue;
+
+      try {
+        final count = await album.assetCountAsync;
+        Uint8List? thumbnail;
+
+        if (count > 0) {
+          final assets = await album.getAssetListRange(start: 0, end: 1);
+          if (assets.isNotEmpty) {
+            thumbnail = await assets.first.thumbnailDataWithSize(
+              const ThumbnailSize(200, 200),
+            );
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _albumInfoCache[albumId] = _AlbumInfo(count: count, thumbnail: thumbnail);
+          });
+        }
+      } catch (e) {
+        // Ignorar errores silenciosamente
+      }
+
+      // Pequeño delay entre cargas para no saturar
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+
+    _isProcessingQueue = false;
   }
 
   @override
@@ -82,6 +143,12 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
             itemCount: albums.length,
             itemBuilder: (context, index) {
               final album = albums[index];
+
+              // Encolar carga cuando el tile se construye
+              _enqueueAlbumLoad(album);
+
+              final info = _albumInfoCache[album.id];
+
               return _AlbumTile(
                 album: album,
                 colors: colors,
@@ -89,6 +156,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 isLoading: _loadingAlbumId == album.id,
                 isDisabled: _isLoadingAlbum && _loadingAlbumId != album.id,
                 onTap: () => _onAlbumTap(album, provider),
+                cachedInfo: info,
               );
             },
           );
@@ -98,13 +166,22 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
   }
 }
 
-class _AlbumTile extends StatefulWidget {
+/// Info cacheada de un álbum
+class _AlbumInfo {
+  final int count;
+  final Uint8List? thumbnail;
+
+  _AlbumInfo({required this.count, this.thumbnail});
+}
+
+class _AlbumTile extends StatelessWidget {
   final AssetPathEntity album;
   final ThemeColors colors;
   final Size size;
   final VoidCallback onTap;
   final bool isLoading;
   final bool isDisabled;
+  final _AlbumInfo? cachedInfo;
 
   const _AlbumTile({
     required this.album,
@@ -113,70 +190,38 @@ class _AlbumTile extends StatefulWidget {
     required this.onTap,
     this.isLoading = false,
     this.isDisabled = false,
+    this.cachedInfo,
   });
 
   @override
-  State<_AlbumTile> createState() => _AlbumTileState();
-}
-
-class _AlbumTileState extends State<_AlbumTile> {
-  int _count = 0;
-  Uint8List? _thumbnail;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAlbumInfo();
-  }
-
-  Future<void> _loadAlbumInfo() async {
-    final count = await widget.album.assetCountAsync;
-
-    if (count > 0) {
-      final assets = await widget.album.getAssetListRange(start: 0, end: 1);
-      if (assets.isNotEmpty) {
-        final thumb = await assets.first.thumbnailDataWithSize(
-          const ThumbnailSize(200, 200),
-        );
-        if (mounted) {
-          setState(() {
-            _count = count;
-            _thumbnail = thumb;
-          });
-        }
-        return;
-      }
-    }
-
-    if (mounted) {
-      setState(() => _count = count);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isEnabled = _count > 0 && !widget.isDisabled && !widget.isLoading;
-    final thumbnailSize = widget.size.width * 0.18;
+    final count = cachedInfo?.count ?? 0;
+    final thumbnail = cachedInfo?.thumbnail;
+    final isInfoLoaded = cachedInfo != null;
+
+    // Habilitado si tiene fotos y no está en otro estado de carga
+    final isEnabled = (isInfoLoaded ? count > 0 : true) && !isDisabled && !isLoading;
+    final thumbnailSize = size.width * 0.18;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: widget.size.height * 0.015),
+      padding: EdgeInsets.only(bottom: size.height * 0.015),
       child: Opacity(
-        opacity: widget.isDisabled ? 0.5 : 1.0,
+        opacity: isDisabled ? 0.5 : 1.0,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: isEnabled ? widget.onTap : null,
+            onTap: isEnabled ? onTap : null,
             borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: EdgeInsets.all(widget.size.width * 0.03),
+              padding: EdgeInsets.all(size.width * 0.03),
               decoration: BoxDecoration(
-                color: widget.colors.surface,
+                color: colors.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: widget.isLoading
-                      ? widget.colors.primaryWithOpacity(0.5)
-                      : widget.colors.divider,
-                  width: widget.isLoading ? 2 : 1,
+                  color: isLoading
+                      ? colors.primaryWithOpacity(0.5)
+                      : colors.divider,
+                  width: isLoading ? 2 : 1,
                 ),
               ),
               child: Row(
@@ -186,19 +231,19 @@ class _AlbumTileState extends State<_AlbumTile> {
                     width: thumbnailSize,
                     height: thumbnailSize,
                     decoration: BoxDecoration(
-                      color: widget.colors.primaryWithOpacity(0.1),
+                      color: colors.primaryWithOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: _thumbnail != null
-                        ? Image.memory(_thumbnail!, fit: BoxFit.cover)
+                    child: thumbnail != null
+                        ? Image.memory(thumbnail, fit: BoxFit.cover)
                         : Icon(
                             Icons.photo_album,
-                            color: widget.colors.textTertiary,
-                            size: widget.size.width * 0.08,
+                            color: colors.textTertiary,
+                            size: size.width * 0.08,
                           ),
                   ),
-                  SizedBox(width: widget.size.width * 0.04),
+                  SizedBox(width: size.width * 0.04),
 
                   // Album info
                   Expanded(
@@ -206,23 +251,27 @@ class _AlbumTileState extends State<_AlbumTile> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.album.name.isEmpty ? 'Sin nombre' : widget.album.name,
+                          album.name.isEmpty ? 'Sin nombre' : album.name,
                           style: TextStyle(
-                            color: widget.colors.textPrimary,
-                            fontSize: widget.size.width * 0.04,
+                            color: colors.textPrimary,
+                            fontSize: size.width * 0.04,
                             fontWeight: FontWeight.w600,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        SizedBox(height: widget.size.height * 0.005),
+                        SizedBox(height: size.height * 0.005),
                         Text(
-                          widget.isLoading ? 'Cargando...' : '$_count fotos',
+                          isLoading
+                              ? 'Cargando...'
+                              : isInfoLoaded
+                                  ? '$count fotos'
+                                  : '...',
                           style: TextStyle(
-                            color: widget.isLoading
-                                ? widget.colors.primary
-                                : widget.colors.textTertiary,
-                            fontSize: widget.size.width * 0.035,
+                            color: isLoading
+                                ? colors.primary
+                                : colors.textTertiary,
+                            fontSize: size.width * 0.035,
                           ),
                         ),
                       ],
@@ -230,20 +279,20 @@ class _AlbumTileState extends State<_AlbumTile> {
                   ),
 
                   // Arrow or loading indicator
-                  if (widget.isLoading)
+                  if (isLoading)
                     SizedBox(
-                      width: widget.size.width * 0.045,
-                      height: widget.size.width * 0.045,
+                      width: size.width * 0.045,
+                      height: size.width * 0.045,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: widget.colors.primary,
+                        color: colors.primary,
                       ),
                     )
                   else
                     Icon(
                       Icons.arrow_forward_ios,
-                      color: widget.colors.textTertiary,
-                      size: widget.size.width * 0.045,
+                      color: colors.textTertiary,
+                      size: size.width * 0.045,
                     ),
                 ],
               ),

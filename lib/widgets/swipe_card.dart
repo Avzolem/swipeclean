@@ -165,20 +165,22 @@ class _SwipeCardState extends State<SwipeCard> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(size.width * 0.05),
         color: const Color(0xFF16213E),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            blurRadius: size.width * 0.05,
+            offset: Offset(0, size.height * 0.012),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(size.width * 0.05),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -197,11 +199,11 @@ class _SwipeCardState extends State<SwipeCard> {
                             fit: BoxFit.contain,
                             gaplessPlayback: true, // Evita parpadeo
                           )
-                        : const Center(
+                        : Center(
                             child: Icon(
                               Icons.broken_image,
                               color: Colors.white54,
-                              size: 48,
+                              size: size.width * 0.12,
                             ),
                           ),
               ),
@@ -212,7 +214,7 @@ class _SwipeCardState extends State<SwipeCard> {
               left: 0,
               right: 0,
               bottom: 0,
-              height: 100,
+              height: size.height * 0.12,
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -232,10 +234,10 @@ class _SwipeCardState extends State<SwipeCard> {
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(size.width * 0.05),
                     border: Border.all(
                       color: widget.swipeProgress < 0 ? Colors.red : Colors.green,
-                      width: 4,
+                      width: size.width * 0.01,
                     ),
                   ),
                 ),
@@ -244,22 +246,25 @@ class _SwipeCardState extends State<SwipeCard> {
             // Delete indicator (left swipe)
             if (widget.swipeProgress < -0.1)
               Positioned(
-                top: 40,
-                right: 20,
+                top: size.height * 0.05,
+                right: size.width * 0.05,
                 child: Transform.rotate(
                   angle: 0.3,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: size.width * 0.04,
+                      vertical: size.height * 0.01,
+                    ),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.red, width: 3),
-                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red, width: size.width * 0.008),
+                      borderRadius: BorderRadius.circular(size.width * 0.02),
                       color: Colors.black.withOpacity(0.3),
                     ),
-                    child: const Text(
+                    child: Text(
                       'ELIMINAR',
                       style: TextStyle(
                         color: Colors.red,
-                        fontSize: 24,
+                        fontSize: size.width * 0.06,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -270,22 +275,25 @@ class _SwipeCardState extends State<SwipeCard> {
             // Keep indicator (right swipe)
             if (widget.swipeProgress > 0.1)
               Positioned(
-                top: 40,
-                left: 20,
+                top: size.height * 0.05,
+                left: size.width * 0.05,
                 child: Transform.rotate(
                   angle: -0.3,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: size.width * 0.04,
+                      vertical: size.height * 0.01,
+                    ),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green, width: 3),
-                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green, width: size.width * 0.008),
+                      borderRadius: BorderRadius.circular(size.width * 0.02),
                       color: Colors.black.withOpacity(0.3),
                     ),
-                    child: const Text(
+                    child: Text(
                       'CONSERVAR',
                       style: TextStyle(
                         color: Colors.green,
-                        fontSize: 24,
+                        fontSize: size.width * 0.06,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -295,36 +303,36 @@ class _SwipeCardState extends State<SwipeCard> {
 
             // Tap hint icon
             Positioned(
-              top: 10,
-              right: 10,
+              top: size.height * 0.012,
+              right: size.width * 0.025,
               child: Container(
-                padding: const EdgeInsets.all(6),
+                padding: EdgeInsets.all(size.width * 0.015),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(size.width * 0.05),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.fullscreen,
                   color: Colors.white70,
-                  size: 20,
+                  size: size.width * 0.05,
                 ),
               ),
             ),
 
             // Photo info
             Positioned(
-              left: 20,
-              right: 20,
-              bottom: 20,
+              left: size.width * 0.05,
+              right: size.width * 0.05,
+              bottom: size.height * 0.025,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     _formatDate(widget.photo.createdAt),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: size.width * 0.045,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -333,7 +341,7 @@ class _SwipeCardState extends State<SwipeCard> {
                       widget.photo.albumName!,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.7),
-                        fontSize: 14,
+                        fontSize: size.width * 0.035,
                       ),
                     ),
                 ],
@@ -362,6 +370,8 @@ class FullImageViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -373,7 +383,7 @@ class FullImageViewer extends StatelessWidget {
         ),
         title: Text(
           _formatDate(photo.createdAt),
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: Colors.white, fontSize: size.width * 0.04),
         ),
       ),
       body: Center(

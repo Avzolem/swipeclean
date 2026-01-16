@@ -289,23 +289,23 @@ class _SwipeScreenState extends State<SwipeScreen> {
                                       opacity: _feedbackMessage != null ? 1.0 : 0.0,
                                       duration: const Duration(milliseconds: 200),
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 32,
-                                          vertical: 16,
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: size.width * 0.08,
+                                          vertical: size.height * 0.02,
                                         ),
                                         decoration: BoxDecoration(
                                           color: Colors.black.withOpacity(0.7),
                                           borderRadius: BorderRadius.circular(16),
                                           border: Border.all(
                                             color: _feedbackColor ?? Colors.white,
-                                            width: 3,
+                                            width: size.width * 0.008,
                                           ),
                                         ),
                                         child: Text(
                                           _feedbackMessage ?? '',
                                           style: TextStyle(
                                             color: _feedbackColor ?? Colors.white,
-                                            fontSize: 28,
+                                            fontSize: size.width * 0.07,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),

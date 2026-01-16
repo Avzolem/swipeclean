@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _toggleTheme() {
     final themeProvider = context.read<ThemeProvider>();
-    themeProvider.cycleTheme();
+    themeProvider.toggleTheme();
     // Guardar preferencia
     StorageService().saveTheme(themeProvider.themeString);
   }
@@ -319,6 +319,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     context,
                     MaterialPageRoute(builder: (_) => const TrashScreen()),
                   ),
+                  extraInfo: trashProvider.trashCount > 0 && !trashProvider.isCalculatingSpace
+                      ? '~${TrashProvider.formatBytes(trashProvider.estimatedSpaceBytes)} a liberar'
+                      : null,
                 ),
               ),
               SizedBox(width: size.width * 0.03),
@@ -462,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Reiniciar limpieza',
-          style: TextStyle(color: colors.textPrimary, fontSize: size.width * 0.045),
+          style: TextStyle(color: colors.textPrimary, fontSize: size.width * 0.05),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -470,25 +473,60 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           children: [
             Text(
               '¿Qué deseas reiniciar?',
-              style: TextStyle(color: colors.textSecondary, fontSize: size.width * 0.035),
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: size.width * 0.042,
+              ),
             ),
-            SizedBox(height: size.height * 0.015),
+            SizedBox(height: size.height * 0.02),
             Text(
               '• ${trashProvider.reviewedCount} fotos revisadas',
-              style: TextStyle(color: colors.textTertiary, fontSize: size.width * 0.03),
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: size.width * 0.038,
+              ),
             ),
+            SizedBox(height: size.height * 0.008),
             Text(
               '• ${trashProvider.trashCount} fotos en papelera',
-              style: TextStyle(color: colors.textTertiary, fontSize: size.width * 0.03),
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: size.width * 0.038,
+              ),
             ),
           ],
         ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actionsPadding: EdgeInsets.only(
+          left: size.width * 0.04,
+          right: size.width * 0.04,
+          bottom: size.height * 0.02,
+        ),
         actions: [
-          TextButton(
+          // Botón Cancelar - fondo rojo claro
+          OutlinedButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar', style: TextStyle(color: colors.textSecondary)),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: colors.danger.withOpacity(0.1),
+              side: BorderSide(color: colors.danger.withOpacity(0.5)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: size.width * 0.04,
+                vertical: size.height * 0.012,
+              ),
+            ),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(
+                color: colors.danger,
+                fontSize: size.width * 0.035,
+              ),
+            ),
           ),
-          TextButton(
+          // Botón Solo revisadas - fondo verde claro
+          OutlinedButton(
             onPressed: () async {
               Navigator.pop(context);
               await trashProvider.resetReviewProgress();
@@ -504,11 +542,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 );
               }
             },
+            style: OutlinedButton.styleFrom(
+              backgroundColor: colors.success.withOpacity(0.1),
+              side: BorderSide(color: colors.success.withOpacity(0.5)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: size.width * 0.04,
+                vertical: size.height * 0.012,
+              ),
+            ),
             child: Text(
               'Solo revisadas',
-              style: TextStyle(fontSize: size.width * 0.032),
+              style: TextStyle(
+                color: colors.success,
+                fontSize: size.width * 0.035,
+              ),
             ),
           ),
+          // Botón Todo - fondo warning sólido
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
@@ -525,10 +578,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: colors.warning),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colors.warning,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: size.width * 0.05,
+                vertical: size.height * 0.012,
+              ),
+            ),
             child: Text(
               'Todo',
-              style: TextStyle(fontSize: size.width * 0.032, color: Colors.white),
+              style: TextStyle(
+                fontSize: size.width * 0.035,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -544,35 +610,67 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ThemeColors colors,
     Size size, {
     VoidCallback? onTap,
+    String? extraInfo,
   }) {
     final content = Container(
       padding: EdgeInsets.all(size.width * 0.04),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: size.width * 0.06),
-          SizedBox(height: size.height * 0.01),
-          Text(
-            value,
-            style: TextStyle(
-              color: colors.textPrimary,
-              fontSize: size.width * 0.06,
-              fontWeight: FontWeight.bold,
-            ),
+          // Icono y número en línea
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: size.width * 0.06),
+              SizedBox(width: size.width * 0.025),
+              Text(
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: size.width * 0.065,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: size.height * 0.003),
-          Text(
-            label,
-            style: TextStyle(
-              color: colors.textSecondary,
-              fontSize: size.width * 0.03,
-            ),
+          SizedBox(height: size.height * 0.005),
+          // Label abajo
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: size.width * 0.03,
+                  ),
+                ),
+              ),
+              // Indicador sutil si es clickeable
+              if (onTap != null)
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: colors.textTertiary,
+                  size: size.width * 0.03,
+                ),
+            ],
           ),
+          // Info extra (ej: espacio a liberar)
+          if (extraInfo != null) ...[
+            SizedBox(height: size.height * 0.003),
+            Text(
+              extraInfo,
+              style: TextStyle(
+                color: color.withOpacity(0.8),
+                fontSize: size.width * 0.025,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ],
       ),
     );

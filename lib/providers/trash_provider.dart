@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../models/trash_item.dart';
 import '../services/storage_service.dart';
 import '../services/photo_service.dart';
@@ -10,6 +11,8 @@ class TrashProvider extends ChangeNotifier {
   List<TrashItem> _trashItems = [];
   Set<String> _selectedItems = {};
   bool _isDeleting = false;
+  int _estimatedSpaceBytes = 0;
+  bool _isCalculatingSpace = false;
 
   List<TrashItem> get trashItems => _trashItems;
   Set<String> get selectedItems => _selectedItems;
@@ -17,11 +20,61 @@ class TrashProvider extends ChangeNotifier {
   int get trashCount => _trashItems.length;
   int get selectedCount => _selectedItems.length;
   bool get hasSelection => _selectedItems.isNotEmpty;
+  int get estimatedSpaceBytes => _estimatedSpaceBytes;
+  bool get isCalculatingSpace => _isCalculatingSpace;
+
+  /// Formatea bytes a string legible (KB, MB, GB)
+  static String formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  /// Calcula el espacio aproximado a liberar
+  Future<void> calculateSpace() async {
+    if (_trashItems.isEmpty) {
+      _estimatedSpaceBytes = 0;
+      notifyListeners();
+      return;
+    }
+
+    _isCalculatingSpace = true;
+    notifyListeners();
+
+    int totalBytes = 0;
+
+    for (final item in _trashItems) {
+      try {
+        final asset = await AssetEntity.fromId(item.photoId);
+        if (asset != null) {
+          // Usar dimensiones como aproximación del tamaño
+          totalBytes += (asset.width * asset.height * 0.5).toInt();
+        }
+      } catch (e) {
+        // Ignorar errores
+      }
+    }
+
+    _estimatedSpaceBytes = totalBytes;
+    _isCalculatingSpace = false;
+    notifyListeners();
+  }
+
+  /// Calcula espacio para items seleccionados (proporción)
+  int calculateSelectedSpace() {
+    if (trashCount == 0) return 0;
+    return (_estimatedSpaceBytes * selectedCount) ~/ trashCount;
+  }
 
   void loadTrash() {
     _trashItems = _storageService.getTrashItems();
     _trashItems.sort((a, b) => b.addedAt.compareTo(a.addedAt));
     notifyListeners();
+    // Calcular espacio en background
+    calculateSpace();
   }
 
   Future<void> addToTrash(String photoId, {String? thumbnailPath}) async {

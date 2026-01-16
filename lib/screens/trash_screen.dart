@@ -15,46 +15,13 @@ class TrashScreen extends StatefulWidget {
 }
 
 class _TrashScreenState extends State<TrashScreen> {
-  int _estimatedSpaceBytes = 0;
-  bool _isCalculatingSpace = true;
-
   @override
   void initState() {
     super.initState();
-    _calculateSpace();
-  }
-
-  Future<void> _calculateSpace() async {
-    final trashProvider = context.read<TrashProvider>();
-    int totalBytes = 0;
-
-    for (final item in trashProvider.trashItems) {
-      try {
-        final asset = await AssetEntity.fromId(item.photoId);
-        if (asset != null) {
-          // Usar dimensiones como aproximación del tamaño
-          totalBytes += (asset.width * asset.height * 0.5).toInt();
-        }
-      } catch (e) {
-        // Ignorar errores
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _estimatedSpaceBytes = totalBytes;
-        _isCalculatingSpace = false;
-      });
-    }
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+    // Recalcular espacio al entrar (por si cambió)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TrashProvider>().calculateSpace();
+    });
   }
 
   @override
@@ -152,7 +119,7 @@ class _TrashScreenState extends State<TrashScreen> {
                       ),
                       child: Column(
                         children: [
-                          if (_isCalculatingSpace)
+                          if (trashProvider.isCalculatingSpace)
                             SizedBox(
                               width: size.width * 0.04,
                               height: size.width * 0.04,
@@ -163,7 +130,7 @@ class _TrashScreenState extends State<TrashScreen> {
                             )
                           else
                             Text(
-                              '~${_formatBytes(_estimatedSpaceBytes)}',
+                              '~${TrashProvider.formatBytes(trashProvider.estimatedSpaceBytes)}',
                               style: TextStyle(
                                 color: colors.success,
                                 fontSize: size.width * 0.035,
@@ -187,7 +154,7 @@ class _TrashScreenState extends State<TrashScreen> {
               // Grid de fotos
               Expanded(
                 child: GridView.builder(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(size.width * 0.03),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     crossAxisSpacing: 4,
@@ -211,7 +178,7 @@ class _TrashScreenState extends State<TrashScreen> {
                               if (snapshot.hasData && snapshot.data != null)
                                 LazyThumbnail(
                                   asset: snapshot.data!,
-                                  size: 300,
+                                  size: (size.width * 0.35).toInt(),
                                   fit: BoxFit.cover,
                                 )
                               else
@@ -227,29 +194,29 @@ class _TrashScreenState extends State<TrashScreen> {
                               if (isSelected)
                                 Container(
                                   color: colors.dangerWithOpacity(0.4),
-                                  child: const Center(
+                                  child: Center(
                                     child: Icon(
                                       Icons.check_circle,
                                       color: Colors.white,
-                                      size: 40,
+                                      size: size.width * 0.1,
                                     ),
                                   ),
                                 ),
 
                               // Selection indicator
                               Positioned(
-                                top: 8,
-                                right: 8,
+                                top: size.width * 0.02,
+                                right: size.width * 0.02,
                                 child: Container(
-                                  width: 24,
-                                  height: 24,
+                                  width: size.width * 0.06,
+                                  height: size.width * 0.06,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: isSelected ? colors.danger : colors.textTertiary,
-                                    border: Border.all(color: Colors.white, width: 2),
+                                    border: Border.all(color: Colors.white, width: size.width * 0.005),
                                   ),
                                   child: isSelected
-                                      ? const Icon(Icons.check, color: Colors.white, size: 16)
+                                      ? Icon(Icons.check, color: Colors.white, size: size.width * 0.04)
                                       : null,
                                 ),
                               ),
@@ -302,7 +269,7 @@ class _TrashScreenState extends State<TrashScreen> {
                     ),
                   ),
                 ),
-                if (trashProvider.hasSelection && !_isCalculatingSpace)
+                if (trashProvider.hasSelection && !trashProvider.isCalculatingSpace)
                   Container(
                     padding: EdgeInsets.symmetric(
                       horizontal: size.width * 0.02,
@@ -313,7 +280,7 @@ class _TrashScreenState extends State<TrashScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '~${_formatBytes(_calculateSelectedSpace(trashProvider))}',
+                      '~${TrashProvider.formatBytes(trashProvider.calculateSelectedSpace())}',
                       style: TextStyle(
                         color: colors.success,
                         fontSize: size.width * 0.03,
@@ -393,11 +360,6 @@ class _TrashScreenState extends State<TrashScreen> {
     );
   }
 
-  int _calculateSelectedSpace(TrashProvider provider) {
-    // Aproximación simple basada en la proporción de fotos seleccionadas
-    if (provider.trashCount == 0) return 0;
-    return (_estimatedSpaceBytes * provider.selectedCount) ~/ provider.trashCount;
-  }
 
   Widget _buildEmptyState(Size size, ThemeColors colors) {
     return Center(
@@ -460,7 +422,6 @@ class _TrashScreenState extends State<TrashScreen> {
                 provider.restoreFromTrash(photoId);
                 context.read<PhotoProvider>().refresh();
                 Navigator.pop(context);
-                _calculateSpace(); // Recalcular espacio
               },
             ),
             ListTile(
@@ -509,7 +470,6 @@ class _TrashScreenState extends State<TrashScreen> {
               final restoredCount = await provider.restoreSelected();
               if (context.mounted) {
                 context.read<PhotoProvider>().refresh();
-                _calculateSpace(); // Recalcular espacio
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('$restoredCount fotos restauradas'),
@@ -530,7 +490,7 @@ class _TrashScreenState extends State<TrashScreen> {
 
   void _confirmDelete(BuildContext context, TrashProvider provider, ThemeColors colors) {
     final size = MediaQuery.of(context).size;
-    final spaceToFree = _calculateSelectedSpace(provider);
+    final spaceToFree = provider.calculateSelectedSpace();
 
     showDialog(
       context: context,
@@ -562,7 +522,7 @@ class _TrashScreenState extends State<TrashScreen> {
                   Icon(Icons.storage, color: colors.success, size: size.width * 0.05),
                   SizedBox(width: size.width * 0.02),
                   Text(
-                    'Liberarás ~${_formatBytes(spaceToFree)}',
+                    'Liberarás ~${TrashProvider.formatBytes(spaceToFree)}',
                     style: TextStyle(
                       color: colors.success,
                       fontSize: size.width * 0.035,
@@ -592,12 +552,11 @@ class _TrashScreenState extends State<TrashScreen> {
               Navigator.pop(context);
               final success = await provider.deleteSelected();
               if (context.mounted) {
-                _calculateSpace(); // Recalcular espacio
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
                       success
-                          ? 'Fotos eliminadas - ${_formatBytes(spaceToFree)} liberados'
+                          ? 'Fotos eliminadas - ${TrashProvider.formatBytes(spaceToFree)} liberados'
                           : 'Error al eliminar',
                     ),
                     backgroundColor: success ? colors.success : colors.danger,

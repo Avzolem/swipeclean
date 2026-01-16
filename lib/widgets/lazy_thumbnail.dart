@@ -66,6 +66,7 @@ class _LazyThumbnailState extends State<LazyThumbnail> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
     Widget content;
 
     if (_imageData != null) {
@@ -77,12 +78,12 @@ class _LazyThumbnailState extends State<LazyThumbnail> {
     } else if (_isLoading) {
       content = Container(
         color: Colors.grey[900],
-        child: const Center(
+        child: Center(
           child: SizedBox(
-            width: 20,
-            height: 20,
+            width: screenWidth * 0.05,
+            height: screenWidth * 0.05,
             child: CircularProgressIndicator(
-              strokeWidth: 2,
+              strokeWidth: screenWidth * 0.005,
               color: Colors.white30,
             ),
           ),
@@ -91,9 +92,10 @@ class _LazyThumbnailState extends State<LazyThumbnail> {
     } else {
       content = Container(
         color: Colors.grey[800],
-        child: const Icon(
+        child: Icon(
           Icons.broken_image,
           color: Colors.white30,
+          size: screenWidth * 0.06,
         ),
       );
     }
