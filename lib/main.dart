@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'providers/photo_provider.dart';
 import 'providers/trash_provider.dart';
+import 'providers/theme_provider.dart';
 import 'services/storage_service.dart';
 import 'screens/home_screen.dart';
+import 'theme/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,6 +37,7 @@ class SwipeCleanApp extends StatefulWidget {
 
 class _SwipeCleanAppState extends State<SwipeCleanApp> {
   bool _isInitialized = false;
+  final ThemeProvider _themeProvider = ThemeProvider();
 
   @override
   void initState() {
@@ -44,6 +47,11 @@ class _SwipeCleanAppState extends State<SwipeCleanApp> {
 
   Future<void> _initialize() async {
     await _initializeServices();
+
+    // Cargar tema guardado
+    final savedTheme = StorageService().getTheme();
+    _themeProvider.initialize(savedTheme);
+
     if (mounted) {
       setState(() => _isInitialized = true);
     }
@@ -55,23 +63,29 @@ class _SwipeCleanAppState extends State<SwipeCleanApp> {
       providers: [
         ChangeNotifierProvider(create: (_) => PhotoProvider()),
         ChangeNotifierProvider(create: (_) => TrashProvider()),
+        ChangeNotifierProvider.value(value: _themeProvider),
       ],
-      child: MaterialApp(
-        title: 'SwipeClean',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF6C63FF),
-            brightness: Brightness.dark,
-          ),
-          scaffoldBackgroundColor: const Color(0xFF1A1A2E),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF1A1A2E),
-            elevation: 0,
-          ),
-        ),
-        home: _isInitialized ? const HomeScreen() : const _LoadingScreen(),
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          // Actualizar barra de estado según el tema
+          SystemChrome.setSystemUIOverlayStyle(
+            SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: themeProvider.isDarkMode
+                  ? Brightness.light
+                  : Brightness.dark,
+            ),
+          );
+
+          return MaterialApp(
+            title: 'SwipeClean',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeProvider.lightTheme,
+            darkTheme: ThemeProvider.darkTheme,
+            themeMode: themeProvider.themeMode,
+            home: _isInitialized ? const HomeScreen() : const _LoadingScreen(),
+          );
+        },
       ),
     );
   }
@@ -82,8 +96,8 @@ class _LoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFF1A1A2E),
+    return Scaffold(
+      backgroundColor: AppColors.darkBackground,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -91,10 +105,10 @@ class _LoadingScreen extends StatelessWidget {
             Icon(
               Icons.cleaning_services_rounded,
               size: 80,
-              color: Color(0xFF6C63FF),
+              color: AppColors.primary,
             ),
-            SizedBox(height: 24),
-            Text(
+            const SizedBox(height: 24),
+            const Text(
               'SwipeClean',
               style: TextStyle(
                 color: Colors.white,
@@ -102,9 +116,9 @@ class _LoadingScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 32),
+            const SizedBox(height: 32),
             CircularProgressIndicator(
-              color: Color(0xFF6C63FF),
+              color: AppColors.primary,
             ),
           ],
         ),

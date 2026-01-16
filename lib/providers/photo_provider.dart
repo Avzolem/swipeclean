@@ -36,7 +36,13 @@ class PhotoProvider extends ChangeNotifier {
           ? _unreviewedPhotos[_currentIndex]
           : null;
   int get totalPhotos => _totalPhotoCount > 0 ? _totalPhotoCount : _photos.length;
-  int get remainingPhotos => _unreviewedPhotos.length - _currentIndex;
+  int get remainingPhotos {
+    final total = totalPhotos;
+    final reviewed = _storageService.reviewedCount;
+    final inTrash = _storageService.trashCount;
+    final pending = total - reviewed - inTrash;
+    return pending > 0 ? pending : 0;
+  }
 
   /// Verifica permisos rápidamente sin mostrar diálogo
   Future<bool> quickCheckPermission() async {

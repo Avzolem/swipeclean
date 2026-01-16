@@ -12,12 +12,14 @@ class StorageService {
   static const String _hashBoxName = 'photo_hashes';
   static const String _duplicateBoxName = 'duplicate_results';
   static const String _photoCacheBoxName = 'photo_cache';
+  static const String _settingsBoxName = 'settings';
 
   Box<TrashItem>? _trashBox;
   Box<String>? _reviewedBox;
   Box<PhotoHash>? _hashBox;
   Box<DuplicateResult>? _duplicateBox;
   Box<dynamic>? _photoCacheBox;
+  Box<dynamic>? _settingsBox;
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -37,6 +39,7 @@ class StorageService {
     _hashBox = await Hive.openBox<PhotoHash>(_hashBoxName);
     _duplicateBox = await Hive.openBox<DuplicateResult>(_duplicateBoxName);
     _photoCacheBox = await Hive.openBox<dynamic>(_photoCacheBoxName);
+    _settingsBox = await Hive.openBox<dynamic>(_settingsBoxName);
   }
 
   // Trash operations
@@ -167,5 +170,38 @@ class StorageService {
 
   Future<void> clearPhotoCache() async {
     await _photoCacheBox?.clear();
+  }
+
+  // Settings operations - Tema
+  Future<void> saveTheme(String theme) async {
+    await _settingsBox?.put('theme', theme);
+  }
+
+  String? getTheme() {
+    return _settingsBox?.get('theme');
+  }
+
+  // Settings operations - Tutorial
+  Future<void> setTutorialShown() async {
+    await _settingsBox?.put('tutorial_shown', true);
+  }
+
+  bool isTutorialShown() {
+    return _settingsBox?.get('tutorial_shown', defaultValue: false) ?? false;
+  }
+
+  // Settings operations - Duplicates notification
+  Future<void> setDuplicatesNotificationShown(bool shown) async {
+    await _settingsBox?.put('duplicates_notification_shown', shown);
+  }
+
+  bool isDuplicatesNotificationShown() {
+    return _settingsBox?.get('duplicates_notification_shown', defaultValue: false) ?? false;
+  }
+
+  /// Resetea el flag de notificación de duplicados
+  /// (se llama cuando el usuario agrega nuevas fotos a papelera desde duplicados)
+  Future<void> resetDuplicatesNotification() async {
+    await _settingsBox?.put('duplicates_notification_shown', false);
   }
 }

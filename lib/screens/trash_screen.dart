@@ -3,6 +3,8 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../providers/trash_provider.dart';
 import '../providers/photo_provider.dart';
+import '../providers/theme_provider.dart';
+import '../theme/app_colors.dart';
 import '../widgets/lazy_thumbnail.dart';
 
 class TrashScreen extends StatefulWidget {
@@ -58,20 +60,22 @@ class _TrashScreenState extends State<TrashScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final themeProvider = context.watch<ThemeProvider>();
+    final colors = themeProvider.colors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: colors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Consumer<TrashProvider>(
           builder: (context, provider, _) => Text(
             'Papelera (${provider.trashCount})',
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: colors.textPrimary),
           ),
         ),
         actions: [
@@ -81,7 +85,7 @@ class _TrashScreenState extends State<TrashScreen> {
               return IconButton(
                 icon: Icon(
                   provider.hasSelection ? Icons.deselect : Icons.select_all,
-                  color: Colors.white,
+                  color: colors.textPrimary,
                 ),
                 onPressed: () {
                   if (provider.hasSelection) {
@@ -98,7 +102,7 @@ class _TrashScreenState extends State<TrashScreen> {
       body: Consumer<TrashProvider>(
         builder: (context, trashProvider, _) {
           if (trashProvider.trashCount == 0) {
-            return _buildEmptyState(size);
+            return _buildEmptyState(size, colors);
           }
 
           return Column(
@@ -106,12 +110,12 @@ class _TrashScreenState extends State<TrashScreen> {
               // Header con estadísticas
               Container(
                 padding: EdgeInsets.all(size.width * 0.04),
-                color: const Color(0xFF16213E),
+                color: colors.surface,
                 child: Row(
                   children: [
                     Icon(
                       Icons.delete_sweep,
-                      color: Colors.red.withOpacity(0.8),
+                      color: colors.danger.withOpacity(0.8),
                       size: size.width * 0.06,
                     ),
                     SizedBox(width: size.width * 0.03),
@@ -122,7 +126,7 @@ class _TrashScreenState extends State<TrashScreen> {
                           Text(
                             '${trashProvider.trashCount} fotos en papelera',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: colors.textPrimary,
                               fontSize: size.width * 0.038,
                               fontWeight: FontWeight.bold,
                             ),
@@ -130,7 +134,7 @@ class _TrashScreenState extends State<TrashScreen> {
                           Text(
                             'Selecciona para restaurar o eliminar',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
+                              color: colors.textTertiary,
                               fontSize: size.width * 0.03,
                             ),
                           ),
@@ -143,7 +147,7 @@ class _TrashScreenState extends State<TrashScreen> {
                         vertical: size.height * 0.008,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.2),
+                        color: colors.successWithOpacity(0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -152,16 +156,16 @@ class _TrashScreenState extends State<TrashScreen> {
                             SizedBox(
                               width: size.width * 0.04,
                               height: size.width * 0.04,
-                              child: const CircularProgressIndicator(
+                              child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.green,
+                                color: colors.success,
                               ),
                             )
                           else
                             Text(
                               '~${_formatBytes(_estimatedSpaceBytes)}',
                               style: TextStyle(
-                                color: Colors.green,
+                                color: colors.success,
                                 fontSize: size.width * 0.035,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -169,7 +173,7 @@ class _TrashScreenState extends State<TrashScreen> {
                           Text(
                             'a liberar',
                             style: TextStyle(
-                              color: Colors.green.withOpacity(0.7),
+                              color: colors.success.withOpacity(0.7),
                               fontSize: size.width * 0.025,
                             ),
                           ),
@@ -200,7 +204,7 @@ class _TrashScreenState extends State<TrashScreen> {
                       builder: (context, snapshot) {
                         return GestureDetector(
                           onTap: () => trashProvider.toggleSelection(item.photoId),
-                          onLongPress: () => _showItemOptions(context, item.photoId, trashProvider),
+                          onLongPress: () => _showItemOptions(context, item.photoId, trashProvider, colors),
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -212,17 +216,17 @@ class _TrashScreenState extends State<TrashScreen> {
                                 )
                               else
                                 Container(
-                                  color: Colors.grey[800],
-                                  child: const Icon(
+                                  color: colors.surface,
+                                  child: Icon(
                                     Icons.broken_image,
-                                    color: Colors.white54,
+                                    color: colors.textTertiary,
                                   ),
                                 ),
 
                               // Selection overlay
                               if (isSelected)
                                 Container(
-                                  color: Colors.red.withOpacity(0.4),
+                                  color: colors.dangerWithOpacity(0.4),
                                   child: const Center(
                                     child: Icon(
                                       Icons.check_circle,
@@ -241,7 +245,7 @@ class _TrashScreenState extends State<TrashScreen> {
                                   height: 24,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: isSelected ? Colors.red : Colors.white.withOpacity(0.5),
+                                    color: isSelected ? colors.danger : colors.textTertiary,
                                     border: Border.all(color: Colors.white, width: 2),
                                   ),
                                   child: isSelected
@@ -260,7 +264,7 @@ class _TrashScreenState extends State<TrashScreen> {
 
               // Bottom action bar
               if (trashProvider.trashCount > 0)
-                _buildBottomBar(context, trashProvider, size),
+                _buildBottomBar(context, trashProvider, size, colors),
             ],
           );
         },
@@ -268,11 +272,11 @@ class _TrashScreenState extends State<TrashScreen> {
     );
   }
 
-  Widget _buildBottomBar(BuildContext context, TrashProvider trashProvider, Size size) {
+  Widget _buildBottomBar(BuildContext context, TrashProvider trashProvider, Size size, ThemeColors colors) {
     return Container(
       padding: EdgeInsets.all(size.width * 0.04),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: colors.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -293,7 +297,7 @@ class _TrashScreenState extends State<TrashScreen> {
                         ? '${trashProvider.selectedCount} seleccionadas'
                         : 'Selecciona fotos',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: colors.textSecondary,
                       fontSize: size.width * 0.035,
                     ),
                   ),
@@ -305,13 +309,13 @@ class _TrashScreenState extends State<TrashScreen> {
                       vertical: size.height * 0.005,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.2),
+                      color: colors.successWithOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '~${_formatBytes(_calculateSelectedSpace(trashProvider))}',
                       style: TextStyle(
-                        color: Colors.green,
+                        color: colors.success,
                         fontSize: size.width * 0.03,
                         fontWeight: FontWeight.bold,
                       ),
@@ -329,9 +333,9 @@ class _TrashScreenState extends State<TrashScreen> {
                       child: ElevatedButton.icon(
                         onPressed: trashProvider.isDeleting
                             ? null
-                            : () => _confirmRestore(context, trashProvider),
+                            : () => _confirmRestore(context, trashProvider, colors),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
+                          backgroundColor: colors.success,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                           ),
@@ -353,9 +357,9 @@ class _TrashScreenState extends State<TrashScreen> {
                       child: ElevatedButton.icon(
                         onPressed: trashProvider.isDeleting
                             ? null
-                            : () => _confirmDelete(context, trashProvider),
+                            : () => _confirmDelete(context, trashProvider, colors),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
+                          backgroundColor: colors.danger,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                           ),
@@ -395,7 +399,7 @@ class _TrashScreenState extends State<TrashScreen> {
     return (_estimatedSpaceBytes * provider.selectedCount) ~/ provider.trashCount;
   }
 
-  Widget _buildEmptyState(Size size) {
+  Widget _buildEmptyState(Size size, ThemeColors colors) {
     return Center(
       child: Padding(
         padding: EdgeInsets.all(size.width * 0.08),
@@ -405,13 +409,13 @@ class _TrashScreenState extends State<TrashScreen> {
             Icon(
               Icons.delete_outline,
               size: size.width * 0.2,
-              color: Colors.white.withOpacity(0.3),
+              color: colors.textTertiary,
             ),
             SizedBox(height: size.height * 0.02),
             Text(
               'Papelera vacía',
               style: TextStyle(
-                color: Colors.white,
+                color: colors.textPrimary,
                 fontSize: size.width * 0.05,
                 fontWeight: FontWeight.bold,
               ),
@@ -420,7 +424,7 @@ class _TrashScreenState extends State<TrashScreen> {
             Text(
               'Las fotos que marques para eliminar aparecerán aquí',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
+                color: colors.textTertiary,
                 fontSize: size.width * 0.035,
               ),
               textAlign: TextAlign.center,
@@ -431,12 +435,12 @@ class _TrashScreenState extends State<TrashScreen> {
     );
   }
 
-  void _showItemOptions(BuildContext context, String photoId, TrashProvider provider) {
+  void _showItemOptions(BuildContext context, String photoId, TrashProvider provider, ThemeColors colors) {
     final size = MediaQuery.of(context).size;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF16213E),
+      backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -446,11 +450,11 @@ class _TrashScreenState extends State<TrashScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.restore, color: Colors.green),
-              title: const Text('Restaurar', style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.restore, color: colors.success),
+              title: Text('Restaurar', style: TextStyle(color: colors.textPrimary)),
               subtitle: Text(
                 'Devolver a la galería',
-                style: TextStyle(color: Colors.white.withOpacity(0.6)),
+                style: TextStyle(color: colors.textTertiary),
               ),
               onTap: () {
                 provider.restoreFromTrash(photoId);
@@ -460,16 +464,16 @@ class _TrashScreenState extends State<TrashScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_forever, color: Colors.red),
-              title: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.delete_forever, color: colors.danger),
+              title: Text('Eliminar', style: TextStyle(color: colors.textPrimary)),
               subtitle: Text(
                 'Borrar permanentemente',
-                style: TextStyle(color: Colors.white.withOpacity(0.6)),
+                style: TextStyle(color: colors.textTertiary),
               ),
               onTap: () {
                 provider.toggleSelection(photoId);
                 Navigator.pop(context);
-                _confirmDelete(context, provider);
+                _confirmDelete(context, provider, colors);
               },
             ),
           ],
@@ -478,26 +482,26 @@ class _TrashScreenState extends State<TrashScreen> {
     );
   }
 
-  void _confirmRestore(BuildContext context, TrashProvider provider) {
+  void _confirmRestore(BuildContext context, TrashProvider provider, ThemeColors colors) {
     final size = MediaQuery.of(context).size;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           '¿Restaurar fotos?',
-          style: TextStyle(color: Colors.white, fontSize: size.width * 0.045),
+          style: TextStyle(color: colors.textPrimary, fontSize: size.width * 0.045),
         ),
         content: Text(
           'Se restaurarán ${provider.selectedCount} fotos y volverán a aparecer en la cola de revisión.',
-          style: TextStyle(color: Colors.white70, fontSize: size.width * 0.035),
+          style: TextStyle(color: colors.textSecondary, fontSize: size.width * 0.035),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar', style: TextStyle(color: colors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -509,14 +513,14 @@ class _TrashScreenState extends State<TrashScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('$restoredCount fotos restauradas'),
-                    backgroundColor: Colors.green,
+                    backgroundColor: colors.success,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: colors.success),
             child: const Text('Restaurar', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -524,18 +528,18 @@ class _TrashScreenState extends State<TrashScreen> {
     );
   }
 
-  void _confirmDelete(BuildContext context, TrashProvider provider) {
+  void _confirmDelete(BuildContext context, TrashProvider provider, ThemeColors colors) {
     final size = MediaQuery.of(context).size;
     final spaceToFree = _calculateSelectedSpace(provider);
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           '¿Eliminar fotos?',
-          style: TextStyle(color: Colors.white, fontSize: size.width * 0.045),
+          style: TextStyle(color: colors.textPrimary, fontSize: size.width * 0.045),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -543,24 +547,24 @@ class _TrashScreenState extends State<TrashScreen> {
           children: [
             Text(
               'Se eliminarán ${provider.selectedCount} fotos permanentemente de tu dispositivo.',
-              style: TextStyle(color: Colors.white70, fontSize: size.width * 0.035),
+              style: TextStyle(color: colors.textSecondary, fontSize: size.width * 0.035),
             ),
             SizedBox(height: size.height * 0.015),
             Container(
               padding: EdgeInsets.all(size.width * 0.03),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+                color: colors.successWithOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
+                border: Border.all(color: colors.successWithOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.storage, color: Colors.green, size: size.width * 0.05),
+                  Icon(Icons.storage, color: colors.success, size: size.width * 0.05),
                   SizedBox(width: size.width * 0.02),
                   Text(
                     'Liberarás ~${_formatBytes(spaceToFree)}',
                     style: TextStyle(
-                      color: Colors.green,
+                      color: colors.success,
                       fontSize: size.width * 0.035,
                       fontWeight: FontWeight.bold,
                     ),
@@ -572,7 +576,7 @@ class _TrashScreenState extends State<TrashScreen> {
             Text(
               'Esta acción no se puede deshacer.',
               style: TextStyle(
-                color: Colors.red.withOpacity(0.8),
+                color: colors.danger.withOpacity(0.8),
                 fontSize: size.width * 0.03,
               ),
             ),
@@ -581,7 +585,7 @@ class _TrashScreenState extends State<TrashScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar', style: TextStyle(color: colors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -596,14 +600,14 @@ class _TrashScreenState extends State<TrashScreen> {
                           ? 'Fotos eliminadas - ${_formatBytes(spaceToFree)} liberados'
                           : 'Error al eliminar',
                     ),
-                    backgroundColor: success ? Colors.green : Colors.red,
+                    backgroundColor: success ? colors.success : colors.danger,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: colors.danger),
             child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
           ),
         ],

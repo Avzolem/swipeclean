@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../providers/photo_provider.dart';
 import '../providers/trash_provider.dart';
+import '../providers/theme_provider.dart';
+import '../services/storage_service.dart';
+import '../theme/app_colors.dart';
 import 'swipe_screen.dart';
 import 'trash_screen.dart';
 import 'albums_screen.dart';
@@ -66,31 +69,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Si no tiene permiso, el UI mostrará la pantalla de solicitud
   }
 
+  void _toggleTheme() {
+    final themeProvider = context.read<ThemeProvider>();
+    themeProvider.cycleTheme();
+    // Guardar preferencia
+    StorageService().saveTheme(themeProvider.themeString);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final colors = themeProvider.colors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Consumer2<PhotoProvider, TrashProvider>(
           builder: (context, photoProvider, trashProvider, _) {
             if (!photoProvider.hasPermission) {
-              return _buildPermissionRequest(photoProvider);
+              return _buildPermissionRequest(photoProvider, colors);
             }
 
             if (photoProvider.isLoading) {
-              return const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+              return Center(
+                child: CircularProgressIndicator(color: colors.primary),
               );
             }
 
-            return _buildHomeContent(photoProvider, trashProvider);
+            return _buildHomeContent(photoProvider, trashProvider, colors);
           },
         ),
       ),
     );
   }
 
-  Widget _buildPermissionRequest(PhotoProvider photoProvider) {
+  Widget _buildPermissionRequest(PhotoProvider photoProvider, ThemeColors colors) {
     final size = MediaQuery.of(context).size;
     return SingleChildScrollView(
       padding: EdgeInsets.all(size.width * 0.08),
@@ -101,13 +114,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Icon(
             Icons.photo_library_outlined,
             size: size.width * 0.2,
-            color: Colors.white54,
+            color: colors.textTertiary,
           ),
           SizedBox(height: size.height * 0.03),
           Text(
             'SwipeClean necesita acceso a tus fotos',
             style: TextStyle(
-              color: Colors.white,
+              color: colors.textPrimary,
               fontSize: size.width * 0.05,
               fontWeight: FontWeight.bold,
             ),
@@ -116,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           SizedBox(height: size.height * 0.015),
           Text(
             'Para poder ayudarte a limpiar tu galería, necesitamos permiso para ver tus fotos.',
-            style: TextStyle(color: Colors.white70, fontSize: size.width * 0.04),
+            style: TextStyle(color: colors.textSecondary, fontSize: size.width * 0.04),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: size.height * 0.04),
@@ -138,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: colors.primary,
               padding: EdgeInsets.symmetric(
                 horizontal: size.width * 0.08,
                 vertical: size.height * 0.018,
@@ -162,13 +175,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             },
             icon: Icon(
               Icons.settings,
-              color: Colors.white.withOpacity(0.7),
+              color: colors.textSecondary,
               size: size.width * 0.05,
             ),
             label: Text(
               'Abrir Configuración',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: colors.textSecondary,
                 fontSize: size.width * 0.035,
               ),
             ),
@@ -180,9 +193,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Container(
             padding: EdgeInsets.all(size.width * 0.04),
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
+              color: colors.warningWithOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              border: Border.all(color: colors.warningWithOpacity(0.3)),
             ),
             child: Column(
               children: [
@@ -190,14 +203,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     Icon(
                       Icons.info_outline,
-                      color: Colors.orange,
+                      color: colors.warning,
                       size: size.width * 0.05,
                     ),
                     SizedBox(width: size.width * 0.02),
                     Text(
                       '¿Xiaomi/MIUI?',
                       style: TextStyle(
-                        color: Colors.orange,
+                        color: colors.warning,
                         fontSize: size.width * 0.04,
                         fontWeight: FontWeight.bold,
                       ),
@@ -208,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Text(
                   'Si el permiso no funciona, abre Configuración → Permisos → Fotos y videos → Permitir',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                    color: colors.textSecondary,
                     fontSize: size.width * 0.032,
                   ),
                 ),
@@ -220,30 +233,48 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildHomeContent(PhotoProvider photoProvider, TrashProvider trashProvider) {
+  Widget _buildHomeContent(
+    PhotoProvider photoProvider,
+    TrashProvider trashProvider,
+    ThemeColors colors,
+  ) {
     final size = MediaQuery.of(context).size;
     final padding = size.width * 0.05;
+    final themeProvider = context.watch<ThemeProvider>();
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(padding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'SwipeClean',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: size.width * 0.07,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: size.height * 0.005),
-          Text(
-            'Limpia tu galería con swipes',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: size.width * 0.035,
-            ),
+          // Header con título y botón de tema
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SwipeClean',
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: size.width * 0.07,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: size.height * 0.005),
+                  Text(
+                    'Limpia tu galería con swipes',
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: size.width * 0.035,
+                    ),
+                  ),
+                ],
+              ),
+              // Botón de tema
+              _buildThemeButton(themeProvider, colors, size),
+            ],
           ),
           SizedBox(height: size.height * 0.025),
 
@@ -255,7 +286,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   'Fotos',
                   photoProvider.totalPhotos.toString(),
                   Icons.photo_library,
-                  const Color(0xFF6C63FF),
+                  colors.primary,
+                  colors,
                   size,
                 ),
               ),
@@ -265,7 +297,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   'Revisadas',
                   trashProvider.reviewedCount.toString(),
                   Icons.check_circle,
-                  const Color(0xFF00C851),
+                  colors.success,
+                  colors,
                   size,
                 ),
               ),
@@ -279,7 +312,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   'En papelera',
                   trashProvider.trashCount.toString(),
                   Icons.delete,
-                  const Color(0xFFFF5252),
+                  colors.danger,
+                  colors,
                   size,
                   onTap: () => Navigator.push(
                     context,
@@ -293,7 +327,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   'Pendientes',
                   photoProvider.remainingPhotos.toString(),
                   Icons.pending,
-                  const Color(0xFFFFAB00),
+                  colors.warning,
+                  colors,
                   size,
                 ),
               ),
@@ -306,7 +341,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _buildActionButton(
             'Empezar a limpiar',
             Icons.swipe,
-            const Color(0xFF6C63FF),
+            colors.primary,
+            colors,
             () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const SwipeScreen()),
@@ -317,7 +353,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _buildActionButton(
             'Ver papelera (${trashProvider.trashCount})',
             Icons.delete_outline,
-            const Color(0xFFFF5252),
+            colors.danger,
+            colors,
             () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const TrashScreen()),
@@ -328,7 +365,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _buildActionButton(
             'Álbumes',
             Icons.folder_outlined,
-            const Color(0xFF00C851),
+            colors.success,
+            colors,
             () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const AlbumsScreen()),
@@ -339,7 +377,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _buildActionButton(
             'Duplicadas',
             Icons.compare,
-            const Color(0xFFFFAB00),
+            colors.warning,
+            colors,
             () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const DuplicatesScreen()),
@@ -353,8 +392,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _buildActionButton(
               'Reiniciar limpieza',
               Icons.refresh,
-              Colors.grey,
-              () => _showResetDialog(context, size, photoProvider, trashProvider),
+              colors.textTertiary,
+              colors,
+              () => _showResetDialog(context, size, photoProvider, trashProvider, colors),
               size,
             ),
 
@@ -363,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Text(
               'Powered by avsolem.com',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
+                color: colors.textTertiary,
                 fontSize: size.width * 0.03,
                 fontWeight: FontWeight.w300,
               ),
@@ -375,20 +415,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildThemeButton(ThemeProvider themeProvider, ThemeColors colors, Size size) {
+    return GestureDetector(
+      onTap: _toggleTheme,
+      child: Container(
+        padding: EdgeInsets.all(size.width * 0.03),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colors.divider),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              themeProvider.themeIcon,
+              color: colors.primary,
+              size: size.width * 0.05,
+            ),
+            SizedBox(width: size.width * 0.02),
+            Text(
+              themeProvider.themeName,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: size.width * 0.032,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showResetDialog(
     BuildContext context,
     Size size,
     PhotoProvider photoProvider,
     TrashProvider trashProvider,
+    ThemeColors colors,
   ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Reiniciar limpieza',
-          style: TextStyle(color: Colors.white, fontSize: size.width * 0.045),
+          style: TextStyle(color: colors.textPrimary, fontSize: size.width * 0.045),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -396,23 +470,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           children: [
             Text(
               '¿Qué deseas reiniciar?',
-              style: TextStyle(color: Colors.white70, fontSize: size.width * 0.035),
+              style: TextStyle(color: colors.textSecondary, fontSize: size.width * 0.035),
             ),
             SizedBox(height: size.height * 0.015),
             Text(
               '• ${trashProvider.reviewedCount} fotos revisadas',
-              style: TextStyle(color: Colors.white60, fontSize: size.width * 0.03),
+              style: TextStyle(color: colors.textTertiary, fontSize: size.width * 0.03),
             ),
             Text(
               '• ${trashProvider.trashCount} fotos en papelera',
-              style: TextStyle(color: Colors.white60, fontSize: size.width * 0.03),
+              style: TextStyle(color: colors.textTertiary, fontSize: size.width * 0.03),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar', style: TextStyle(color: colors.textSecondary)),
           ),
           TextButton(
             onPressed: () async {
@@ -423,7 +497,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: const Text('Progreso reiniciado (papelera conservada)'),
-                    backgroundColor: Colors.green,
+                    backgroundColor: colors.success,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
@@ -444,14 +518,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: const Text('Todo reiniciado'),
-                    backgroundColor: Colors.orange,
+                    backgroundColor: colors.warning,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            style: ElevatedButton.styleFrom(backgroundColor: colors.warning),
             child: Text(
               'Todo',
               style: TextStyle(fontSize: size.width * 0.032, color: Colors.white),
@@ -467,6 +541,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String value,
     IconData icon,
     Color color,
+    ThemeColors colors,
     Size size, {
     VoidCallback? onTap,
   }) {
@@ -485,7 +560,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Text(
             value,
             style: TextStyle(
-              color: Colors.white,
+              color: colors.textPrimary,
               fontSize: size.width * 0.06,
               fontWeight: FontWeight.bold,
             ),
@@ -494,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
+              color: colors.textSecondary,
               fontSize: size.width * 0.03,
             ),
           ),
@@ -520,6 +595,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String label,
     IconData icon,
     Color color,
+    ThemeColors colors,
     VoidCallback onTap,
     Size size,
   ) {
@@ -534,7 +610,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             vertical: size.height * 0.018,
           ),
           decoration: BoxDecoration(
-            color: const Color(0xFF16213E),
+            color: colors.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: color.withOpacity(0.3)),
           ),
@@ -553,7 +629,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: colors.textPrimary,
                     fontSize: size.width * 0.038,
                     fontWeight: FontWeight.w500,
                   ),
@@ -561,7 +637,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               Icon(
                 Icons.arrow_forward_ios,
-                color: Colors.white.withOpacity(0.5),
+                color: colors.textTertiary,
                 size: size.width * 0.04,
               ),
             ],

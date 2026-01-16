@@ -4,8 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../providers/photo_provider.dart';
 import '../providers/trash_provider.dart';
+import '../providers/theme_provider.dart';
+import '../services/storage_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/swipe_card.dart';
+import '../widgets/swipe_tutorial.dart';
 import '../models/photo.dart';
+import 'duplicates_screen.dart';
 
 class SwipeScreen extends StatefulWidget {
   const SwipeScreen({super.key});
@@ -16,6 +21,7 @@ class SwipeScreen extends StatefulWidget {
 
 class _SwipeScreenState extends State<SwipeScreen> {
   final CardSwiperController _controller = CardSwiperController();
+  final StorageService _storageService = StorageService();
 
   // Historial de acciones para poder deshacer correctamente
   final List<_SwipeAction> _actionHistory = [];
@@ -35,6 +41,31 @@ class _SwipeScreenState extends State<SwipeScreen> {
   // Feedback visual para botones
   String? _feedbackMessage;
   Color? _feedbackColor;
+
+  // Tutorial de primer uso
+  bool _showTutorial = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkTutorial();
+  }
+
+  void _checkTutorial() {
+    // Verificar si es la primera vez
+    if (!_storageService.isTutorialShown()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _showTutorial = true);
+        }
+      });
+    }
+  }
+
+  void _dismissTutorial() {
+    _storageService.setTutorialShown();
+    setState(() => _showTutorial = false);
+  }
 
   @override
   void dispose() {
@@ -60,25 +91,25 @@ class _SwipeScreenState extends State<SwipeScreen> {
   }
 
   /// Botón eliminar con feedback
-  void _onDeletePressed() {
-    _showFeedback('ELIMINAR', Colors.red);
+  void _onDeletePressed(ThemeColors colors) {
+    _showFeedback('ELIMINAR', colors.danger);
     Future.delayed(const Duration(milliseconds: 150), () {
       _controller.swipe(CardSwiperDirection.left);
     });
   }
 
   /// Botón conservar con feedback
-  void _onKeepPressed() {
-    _showFeedback('CONSERVAR', Colors.green);
+  void _onKeepPressed(ThemeColors colors) {
+    _showFeedback('CONSERVAR', colors.success);
     Future.delayed(const Duration(milliseconds: 150), () {
       _controller.swipe(CardSwiperDirection.right);
     });
   }
 
   /// Botón undo con feedback
-  void _onUndoPressed() {
+  void _onUndoPressed(ThemeColors colors) {
     if (_actionHistory.isEmpty) return;
-    _showFeedback('DESHACER', Colors.amber);
+    _showFeedback('DESHACER', colors.warning);
     Future.delayed(const Duration(milliseconds: 150), () {
       _controller.undo();
     });
@@ -97,6 +128,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final themeProvider = context.watch<ThemeProvider>();
+    final colors = themeProvider.colors;
 
     return PopScope(
       canPop: false,
@@ -105,231 +138,241 @@ class _SwipeScreenState extends State<SwipeScreen> {
         _exitScreen();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: colors.background,
         body: SafeArea(
-        child: Consumer2<PhotoProvider, TrashProvider>(
-          builder: (context, photoProvider, trashProvider, _) {
-            // Si estamos saliendo, usar fotos congeladas o mostrar empty state
-            if (_isExiting) {
-              if (_frozenPhotos == null || _frozenPhotos!.isEmpty) {
-                return _buildEmptyState(size);
-              }
-              // Mantener la UI congelada durante la transición de salida
-              return const SizedBox.shrink();
-            }
+          child: Stack(
+            children: [
+              Consumer2<PhotoProvider, TrashProvider>(
+                builder: (context, photoProvider, trashProvider, _) {
+                  // Si estamos saliendo, usar fotos congeladas o mostrar empty state
+                  if (_isExiting) {
+                    if (_frozenPhotos == null || _frozenPhotos!.isEmpty) {
+                      return _buildEmptyState(size, colors);
+                    }
+                    // Mantener la UI congelada durante la transición de salida
+                    return const SizedBox.shrink();
+                  }
 
-            final photos = photoProvider.unreviewedPhotos;
+                  final photos = photoProvider.unreviewedPhotos;
 
-            if (photos.isEmpty) {
-              return _buildEmptyState(size);
-            }
+                  if (photos.isEmpty) {
+                    return _buildEmptyState(size, colors);
+                  }
 
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final buttonHeight = size.height * 0.12;
-                final appBarHeight = size.height * 0.07;
-                final cardHeight = constraints.maxHeight - buttonHeight - appBarHeight;
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final buttonHeight = size.height * 0.12;
+                      final appBarHeight = size.height * 0.07;
+                      final cardHeight = constraints.maxHeight - buttonHeight - appBarHeight;
 
-                return Column(
-                  children: [
-                    // Custom App Bar
-                    SizedBox(
-                      height: appBarHeight,
-                      child: Row(
+                      return Column(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back, color: Colors.white),
-                            onPressed: _exitScreen,
-                          ),
-                          Expanded(
-                            child: Center(
-                              child: Text(
-                                '${photos.length - _currentIndex} fotos restantes',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: size.width * 0.04,
+                          // Custom App Bar
+                          SizedBox(
+                            height: appBarHeight,
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.arrow_back, color: colors.textPrimary),
+                                  onPressed: _exitScreen,
                                 ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: size.width * 0.12),
-                        ],
-                      ),
-                    ),
-
-                    // Card area con overlay de feedback
-                    SizedBox(
-                      height: cardHeight,
-                      child: Stack(
-                        children: [
-                          CardSwiper(
-                        controller: _controller,
-                        cardsCount: photos.length,
-                        numberOfCardsDisplayed: photos.length > 2 ? 3 : photos.length,
-                        backCardOffset: const Offset(0, 25),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: size.width * 0.05,
-                          vertical: size.height * 0.01,
-                        ),
-                        // Solo permitir swipes horizontales
-                        allowedSwipeDirection: const AllowedSwipeDirection.only(
-                          left: true,
-                          right: true,
-                          up: false,
-                          down: false,
-                        ),
-                        // Umbral más bajo para swipe más natural
-                        threshold: 50,
-                        onSwipe: (previousIndex, currentIndex, direction) {
-                          final photo = photos[previousIndex];
-
-                          if (direction == CardSwiperDirection.left) {
-                            // Guardar acción en historial antes de ejecutar
-                            _actionHistory.add(_SwipeAction(
-                              photoId: photo.id,
-                              wasAddedToTrash: true,
-                            ));
-                            trashProvider.addToTrash(photo.id);
-                          } else if (direction == CardSwiperDirection.right) {
-                            // Guardar acción en historial antes de ejecutar
-                            _actionHistory.add(_SwipeAction(
-                              photoId: photo.id,
-                              wasAddedToTrash: false,
-                            ));
-                            trashProvider.keepPhoto(photo.id);
-                          }
-
-                          // Actualizar índice actual
-                          setState(() {
-                            _currentIndex = currentIndex ?? 0;
-                          });
-
-                          return true;
-                        },
-                        onUndo: (previousIndex, currentIndex, direction) {
-                          // Revertir la última acción del historial
-                          if (_actionHistory.isNotEmpty) {
-                            final lastAction = _actionHistory.removeLast();
-
-                            if (lastAction.wasAddedToTrash) {
-                              // Si fue agregada a papelera, usar método específico para undo
-                              // que no dispara rebuilds prematuros
-                              trashProvider.undoAddToTrash(lastAction.photoId);
-                            } else {
-                              // Si fue marcada como revisada, desmarcarla
-                              trashProvider.undoKeepPhoto(lastAction.photoId);
-                            }
-
-                            // Actualizar índice actual (volvemos a la tarjeta restaurada)
-                            setState(() {
-                              _currentIndex = currentIndex;
-                            });
-
-                            // NO llamar refresh() aquí - el CardSwiper ya restauró la tarjeta
-                            // y llamar refresh causaría desincronización
-                          }
-                          return true;
-                        },
-                        onEnd: () {
-                          _showCompletedDialog(context);
-                        },
-                        cardBuilder: (context, index, percentThresholdX, percentThresholdY) {
-                          // Preparar lista de fotos siguientes para precargar
-                          final nextPhotos = <Photo>[];
-                          for (int i = index + 1; i < photos.length && nextPhotos.length < 3; i++) {
-                            nextPhotos.add(photos[i]);
-                          }
-
-                          return SwipeCard(
-                            photo: photos[index],
-                            swipeProgress: percentThresholdX.toDouble(),
-                            nextPhotos: nextPhotos,
-                          );
-                        },
-                      ),
-                          // Overlay de feedback para botones
-                          if (_feedbackMessage != null)
-                            Center(
-                              child: AnimatedOpacity(
-                                opacity: _feedbackMessage != null ? 1.0 : 0.0,
-                                duration: const Duration(milliseconds: 200),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 32,
-                                    vertical: 16,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: _feedbackColor ?? Colors.white,
-                                      width: 3,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _feedbackMessage ?? '',
-                                    style: TextStyle(
-                                      color: _feedbackColor ?? Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
+                                Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      '${photos.length - _currentIndex} fotos restantes',
+                                      style: TextStyle(
+                                        color: colors.textPrimary,
+                                        fontSize: size.width * 0.04,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
+                                SizedBox(width: size.width * 0.12),
+                              ],
                             ),
-                        ],
-                      ),
-                    ),
+                          ),
 
-                    // Action buttons
-                    SizedBox(
-                      height: buttonHeight,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildActionButton(
-                            Icons.close,
-                            Colors.red,
-                            _onDeletePressed,
-                            size,
+                          // Card area con overlay de feedback
+                          SizedBox(
+                            height: cardHeight,
+                            child: Stack(
+                              children: [
+                                CardSwiper(
+                                  controller: _controller,
+                                  cardsCount: photos.length,
+                                  numberOfCardsDisplayed: photos.length > 2 ? 3 : photos.length,
+                                  backCardOffset: const Offset(0, 25),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: size.width * 0.05,
+                                    vertical: size.height * 0.01,
+                                  ),
+                                  // Solo permitir swipes horizontales
+                                  allowedSwipeDirection: const AllowedSwipeDirection.only(
+                                    left: true,
+                                    right: true,
+                                    up: false,
+                                    down: false,
+                                  ),
+                                  // Umbral más bajo para swipe más natural
+                                  threshold: 50,
+                                  onSwipe: (previousIndex, currentIndex, direction) {
+                                    final photo = photos[previousIndex];
+
+                                    if (direction == CardSwiperDirection.left) {
+                                      // Guardar acción en historial antes de ejecutar
+                                      _actionHistory.add(_SwipeAction(
+                                        photoId: photo.id,
+                                        wasAddedToTrash: true,
+                                      ));
+                                      trashProvider.addToTrash(photo.id);
+                                    } else if (direction == CardSwiperDirection.right) {
+                                      // Guardar acción en historial antes de ejecutar
+                                      _actionHistory.add(_SwipeAction(
+                                        photoId: photo.id,
+                                        wasAddedToTrash: false,
+                                      ));
+                                      trashProvider.keepPhoto(photo.id);
+                                    }
+
+                                    // Actualizar índice actual
+                                    setState(() {
+                                      _currentIndex = currentIndex ?? 0;
+                                    });
+
+                                    return true;
+                                  },
+                                  onUndo: (previousIndex, currentIndex, direction) {
+                                    // Revertir la última acción del historial
+                                    if (_actionHistory.isNotEmpty) {
+                                      final lastAction = _actionHistory.removeLast();
+
+                                      if (lastAction.wasAddedToTrash) {
+                                        // Si fue agregada a papelera, usar método específico para undo
+                                        // que no dispara rebuilds prematuros
+                                        trashProvider.undoAddToTrash(lastAction.photoId);
+                                      } else {
+                                        // Si fue marcada como revisada, desmarcarla
+                                        trashProvider.undoKeepPhoto(lastAction.photoId);
+                                      }
+
+                                      // Actualizar índice actual (volvemos a la tarjeta restaurada)
+                                      setState(() {
+                                        _currentIndex = currentIndex;
+                                      });
+
+                                      // NO llamar refresh() aquí - el CardSwiper ya restauró la tarjeta
+                                      // y llamar refresh causaría desincronización
+                                    }
+                                    return true;
+                                  },
+                                  onEnd: () {
+                                    _showCompletedDialog(context, colors);
+                                  },
+                                  cardBuilder: (context, index, percentThresholdX, percentThresholdY) {
+                                    // Preparar lista de fotos siguientes para precargar
+                                    final nextPhotos = <Photo>[];
+                                    for (int i = index + 1; i < photos.length && nextPhotos.length < 3; i++) {
+                                      nextPhotos.add(photos[i]);
+                                    }
+
+                                    return SwipeCard(
+                                      photo: photos[index],
+                                      swipeProgress: percentThresholdX.toDouble(),
+                                      nextPhotos: nextPhotos,
+                                    );
+                                  },
+                                ),
+                                // Overlay de feedback para botones
+                                if (_feedbackMessage != null)
+                                  Center(
+                                    child: AnimatedOpacity(
+                                      opacity: _feedbackMessage != null ? 1.0 : 0.0,
+                                      duration: const Duration(milliseconds: 200),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 32,
+                                          vertical: 16,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.7),
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: _feedbackColor ?? Colors.white,
+                                            width: 3,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _feedbackMessage ?? '',
+                                          style: TextStyle(
+                                            color: _feedbackColor ?? Colors.white,
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                          _buildActionButton(
-                            Icons.undo,
-                            Colors.amber,
-                            _actionHistory.isNotEmpty
-                                ? _onUndoPressed
-                                : null,
-                            size,
-                          ),
-                          _buildActionButton(
-                            Icons.share,
-                            Colors.blue,
-                            _isSharing || _currentIndex >= photos.length
-                                ? null
-                                : () => _sharePhoto(photos[_currentIndex]),
-                            size,
-                          ),
-                          _buildActionButton(
-                            Icons.favorite,
-                            Colors.green,
-                            _onKeepPressed,
-                            size,
+
+                          // Action buttons
+                          SizedBox(
+                            height: buttonHeight,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _buildActionButton(
+                                  Icons.close,
+                                  colors.danger,
+                                  () => _onDeletePressed(colors),
+                                  size,
+                                ),
+                                _buildActionButton(
+                                  Icons.undo,
+                                  colors.warning,
+                                  _actionHistory.isNotEmpty
+                                      ? () => _onUndoPressed(colors)
+                                      : null,
+                                  size,
+                                ),
+                                _buildActionButton(
+                                  Icons.share,
+                                  colors.info,
+                                  _isSharing || _currentIndex >= photos.length
+                                      ? null
+                                      : () => _sharePhoto(photos[_currentIndex]),
+                                  size,
+                                ),
+                                _buildActionButton(
+                                  Icons.favorite,
+                                  colors.success,
+                                  () => _onKeepPressed(colors),
+                                  size,
+                                ),
+                              ],
+                            ),
                           ),
                         ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
+                      );
+                    },
+                  );
+                },
+              ),
+              // Tutorial overlay
+              if (_showTutorial)
+                GestureDetector(
+                  onTap: _dismissTutorial,
+                  child: SwipeTutorial(onDismiss: _dismissTutorial),
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 
-  Widget _buildEmptyState(Size size) {
+  Widget _buildEmptyState(Size size, ThemeColors colors) {
     final trashProvider = context.read<TrashProvider>();
     final hasTrash = trashProvider.trashCount > 0;
 
@@ -342,13 +385,13 @@ class _SwipeScreenState extends State<SwipeScreen> {
             Icon(
               Icons.check_circle_outline,
               size: size.width * 0.2,
-              color: Colors.green,
+              color: colors.success,
             ),
             SizedBox(height: size.height * 0.03),
             Text(
               '¡Todo limpio!',
               style: TextStyle(
-                color: Colors.white,
+                color: colors.textPrimary,
                 fontSize: size.width * 0.07,
                 fontWeight: FontWeight.bold,
               ),
@@ -357,7 +400,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
             Text(
               'Has revisado todas las fotos',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: colors.textSecondary,
                 fontSize: size.width * 0.04,
               ),
               textAlign: TextAlign.center,
@@ -367,7 +410,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
               Text(
                 '${trashProvider.trashCount} fotos en papelera',
                 style: TextStyle(
-                  color: Colors.orange.withOpacity(0.8),
+                  color: colors.warning.withOpacity(0.8),
                   fontSize: size.width * 0.035,
                 ),
               ),
@@ -378,7 +421,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
             ElevatedButton(
               onPressed: _exitScreen,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
+                backgroundColor: colors.primary,
                 padding: EdgeInsets.symmetric(
                   horizontal: size.width * 0.08,
                   vertical: size.height * 0.018,
@@ -397,16 +440,16 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
             // Botón para reiniciar
             TextButton.icon(
-              onPressed: () => _showResetDialog(context, size),
+              onPressed: () => _showResetDialog(context, size, colors),
               icon: Icon(
                 Icons.refresh,
-                color: Colors.white.withOpacity(0.7),
+                color: colors.textSecondary,
                 size: size.width * 0.05,
               ),
               label: Text(
                 'Revisar de nuevo',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
+                  color: colors.textSecondary,
                   fontSize: size.width * 0.035,
                 ),
               ),
@@ -417,22 +460,22 @@ class _SwipeScreenState extends State<SwipeScreen> {
     );
   }
 
-  void _showResetDialog(BuildContext context, Size size) {
+  void _showResetDialog(BuildContext context, Size size, ThemeColors colors) {
     final trashProvider = context.read<TrashProvider>();
     final photoProvider = context.read<PhotoProvider>();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Revisar de nuevo',
-          style: TextStyle(color: Colors.white, fontSize: size.width * 0.045),
+          style: TextStyle(color: colors.textPrimary, fontSize: size.width * 0.045),
         ),
         content: Text(
           '¿Qué deseas hacer?',
-          style: TextStyle(color: Colors.white70, fontSize: size.width * 0.035),
+          style: TextStyle(color: colors.textSecondary, fontSize: size.width * 0.035),
         ),
         actions: [
           // Solo revisadas (conservadas)
@@ -467,7 +510,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
               });
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
+              backgroundColor: colors.warning,
             ),
             child: Text(
               'Todo (incluye papelera)',
@@ -555,20 +598,76 @@ class _SwipeScreenState extends State<SwipeScreen> {
     }
   }
 
-  void _showCompletedDialog(BuildContext context) {
+  void _showCompletedDialog(BuildContext context, ThemeColors colors) {
     final size = MediaQuery.of(context).size;
+    final duplicateResult = _storageService.getLastDuplicateResult();
+    final hasDuplicates = duplicateResult != null && duplicateResult.groups.isNotEmpty;
+    final duplicateCount = hasDuplicates
+        ? duplicateResult.groups.fold<int>(0, (sum, g) => sum + g.length - 1)
+        : 0;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           '¡Listo!',
-          style: TextStyle(color: Colors.white, fontSize: size.width * 0.05),
+          style: TextStyle(color: colors.textPrimary, fontSize: size.width * 0.05),
         ),
-        content: Text(
-          'Has revisado todas las fotos. Puedes ir a la papelera para eliminar las fotos marcadas.',
-          style: TextStyle(color: Colors.white70, fontSize: size.width * 0.035),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Has revisado todas las fotos. Puedes ir a la papelera para eliminar las fotos marcadas.',
+              style: TextStyle(color: colors.textSecondary, fontSize: size.width * 0.035),
+            ),
+            // Notificación de duplicados si hay
+            if (hasDuplicates) ...[
+              SizedBox(height: size.height * 0.02),
+              Container(
+                padding: EdgeInsets.all(size.width * 0.03),
+                decoration: BoxDecoration(
+                  color: colors.warningWithOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colors.warningWithOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.content_copy,
+                      color: colors.warning,
+                      size: size.width * 0.06,
+                    ),
+                    SizedBox(width: size.width * 0.03),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Fotos duplicadas detectadas',
+                            style: TextStyle(
+                              color: colors.warning,
+                              fontSize: size.width * 0.035,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            '$duplicateCount fotos similares encontradas',
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: size.width * 0.03,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -578,6 +677,21 @@ class _SwipeScreenState extends State<SwipeScreen> {
             },
             child: Text('Volver al inicio', style: TextStyle(fontSize: size.width * 0.035)),
           ),
+          if (hasDuplicates)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Cierra el dialog
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DuplicatesScreen()),
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: colors.warning),
+              child: Text(
+                'Ver duplicadas',
+                style: TextStyle(fontSize: size.width * 0.035, color: Colors.white),
+              ),
+            ),
         ],
       ),
     );

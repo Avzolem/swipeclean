@@ -4,8 +4,10 @@ import '../models/photo.dart';
 import '../models/photo_hash.dart';
 import '../providers/photo_provider.dart';
 import '../providers/trash_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/duplicate_detector.dart';
 import '../services/storage_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/lazy_thumbnail.dart';
 
 class DuplicatesScreen extends StatefulWidget {
@@ -46,7 +48,9 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     if (cachedResult != null && cachedResult.groups.isNotEmpty) {
       // Tenemos resultados en caché, preguntar al usuario
       if (mounted) {
-        final useCache = await _showCacheDialog(cachedResult);
+        final themeProvider = context.read<ThemeProvider>();
+        final colors = themeProvider.colors;
+        final useCache = await _showCacheDialog(cachedResult, colors);
         if (useCache == true) {
           await _loadCachedResults(cachedResult);
           return;
@@ -58,7 +62,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     _findDuplicates();
   }
 
-  Future<bool?> _showCacheDialog(DuplicateResult cached) {
+  Future<bool?> _showCacheDialog(DuplicateResult cached, ThemeColors colors) {
     final timeSince = DateTime.now().difference(cached.scannedAt);
     String timeText;
 
@@ -74,11 +78,11 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
+        title: Text(
           'Resultados anteriores',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: colors.textPrimary),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -86,24 +90,24 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
           children: [
             Text(
               'Se encontraron ${cached.groups.length} grupos de duplicados $timeText.',
-              style: TextStyle(color: Colors.white.withOpacity(0.8)),
+              style: TextStyle(color: colors.textSecondary),
             ),
             const SizedBox(height: 12),
             Text(
               '¿Deseas ver esos resultados o hacer un nuevo escaneo?',
-              style: TextStyle(color: Colors.white.withOpacity(0.6)),
+              style: TextStyle(color: colors.textTertiary),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Nuevo escaneo'),
+            child: Text('Nuevo escaneo', style: TextStyle(color: colors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: colors.primary,
             ),
             child: const Text('Ver anteriores', style: TextStyle(color: Colors.white)),
           ),
@@ -255,25 +259,27 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final themeProvider = context.watch<ThemeProvider>();
+    final colors = themeProvider.colors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: colors.textPrimary),
           onPressed: _isLoading ? _cancelSearch : () => Navigator.pop(context),
         ),
         title: Text(
           _isLoading ? 'Analizando...' : 'Fotos duplicadas',
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: colors.textPrimary),
         ),
         actions: [
           if (!_isLoading && _duplicateGroups.isNotEmpty) ...[
             if (_isUsingCachedResults)
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: Icon(Icons.refresh, color: colors.textSecondary),
                 tooltip: 'Re-escanear',
                 onPressed: () {
                   _detector.reset();
@@ -281,8 +287,8 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                 },
               ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: Colors.white),
-              color: const Color(0xFF16213E),
+              icon: Icon(Icons.more_vert, color: colors.textPrimary),
+              color: colors.surface,
               onSelected: (value) {
                 if (value == 'select_all') {
                   _selectAllDuplicates();
@@ -291,25 +297,25 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'select_all',
                   child: Row(
                     children: [
-                      Icon(Icons.select_all, color: Colors.white70, size: 20),
-                      SizedBox(width: 8),
+                      Icon(Icons.select_all, color: colors.textSecondary, size: 20),
+                      const SizedBox(width: 8),
                       Text('Seleccionar duplicados',
-                          style: TextStyle(color: Colors.white)),
+                          style: TextStyle(color: colors.textPrimary)),
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'clear',
                   child: Row(
                     children: [
-                      Icon(Icons.clear_all, color: Colors.white70, size: 20),
-                      SizedBox(width: 8),
+                      Icon(Icons.clear_all, color: colors.textSecondary, size: 20),
+                      const SizedBox(width: 8),
                       Text('Limpiar selección',
-                          style: TextStyle(color: Colors.white)),
+                          style: TextStyle(color: colors.textPrimary)),
                     ],
                   ),
                 ),
@@ -318,22 +324,22 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
           ],
         ],
       ),
-      body: _isLoading ? _buildLoadingState(size) : _buildContent(size),
+      body: _isLoading ? _buildLoadingState(size, colors) : _buildContent(size, colors),
       bottomNavigationBar: !_isLoading && _selectedPhotos.isNotEmpty
-          ? _buildBottomBar(size)
+          ? _buildBottomBar(size, colors)
           : null,
     );
   }
 
-  Widget _buildBottomBar(Size size) {
+  Widget _buildBottomBar(Size size, ThemeColors colors) {
     final selectedSpace = _calculateSelectedSpace();
 
     return Container(
       padding: EdgeInsets.all(size.width * 0.04),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: colors.surface,
         border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.1)),
+          top: BorderSide(color: colors.divider),
         ),
       ),
       child: SafeArea(
@@ -347,14 +353,14 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                   Text(
                     '${_selectedPhotos.length} fotos seleccionadas',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: colors.textPrimary,
                       fontSize: size.width * 0.038,
                     ),
                   ),
                   Text(
                     '~${_formatBytes(selectedSpace)} a liberar',
                     style: TextStyle(
-                      color: Colors.green,
+                      color: colors.success,
                       fontSize: size.width * 0.032,
                       fontWeight: FontWeight.bold,
                     ),
@@ -363,12 +369,12 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: _addSelectedToTrash,
+              onPressed: () => _addSelectedToTrash(colors),
               icon: const Icon(Icons.delete, color: Colors.white),
               label: const Text('Mover a papelera',
                   style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: colors.danger,
                 padding: EdgeInsets.symmetric(
                   horizontal: size.width * 0.04,
                   vertical: size.height * 0.015,
@@ -384,7 +390,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     );
   }
 
-  Widget _buildLoadingState(Size size) {
+  Widget _buildLoadingState(Size size, ThemeColors colors) {
     final cachedHashes = _storageService.hashCount;
 
     return Center(
@@ -398,7 +404,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
               height: size.width * 0.2,
               child: CircularProgressIndicator(
                 value: _progress > 0 ? _progress : null,
-                color: const Color(0xFF6C63FF),
+                color: colors.primary,
                 strokeWidth: 4,
               ),
             ),
@@ -406,7 +412,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
             Text(
               'Buscando duplicados',
               style: TextStyle(
-                color: Colors.white,
+                color: colors.textPrimary,
                 fontSize: size.width * 0.05,
                 fontWeight: FontWeight.bold,
               ),
@@ -415,7 +421,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
             Text(
               _statusText,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: colors.textSecondary,
                 fontSize: size.width * 0.035,
               ),
               textAlign: TextAlign.center,
@@ -424,7 +430,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
             Text(
               '${(_progress * 100).toStringAsFixed(2)}%',
               style: TextStyle(
-                color: const Color(0xFF6C63FF),
+                color: colors.primary,
                 fontSize: size.width * 0.06,
                 fontWeight: FontWeight.bold,
               ),
@@ -436,8 +442,8 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
                   value: _progress,
-                  backgroundColor: Colors.white.withOpacity(0.1),
-                  valueColor: const AlwaysStoppedAnimation(Color(0xFF6C63FF)),
+                  backgroundColor: colors.divider,
+                  valueColor: AlwaysStoppedAnimation(colors.primary),
                   minHeight: 8,
                 ),
               ),
@@ -450,7 +456,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                   vertical: size.height * 0.008,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
+                  color: colors.successWithOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -458,14 +464,14 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                   children: [
                     Icon(
                       Icons.flash_on,
-                      color: Colors.green,
+                      color: colors.success,
                       size: size.width * 0.04,
                     ),
                     SizedBox(width: size.width * 0.01),
                     Text(
                       '$cachedHashes hashes en caché',
                       style: TextStyle(
-                        color: Colors.green,
+                        color: colors.success,
                         fontSize: size.width * 0.03,
                       ),
                     ),
@@ -478,12 +484,12 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
               onPressed: _cancelSearch,
               icon: Icon(
                 Icons.close,
-                color: Colors.white.withOpacity(0.7),
+                color: colors.textSecondary,
               ),
               label: Text(
                 'Cancelar',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
+                  color: colors.textSecondary,
                   fontSize: size.width * 0.04,
                 ),
               ),
@@ -494,7 +500,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     );
   }
 
-  Widget _buildContent(Size size) {
+  Widget _buildContent(Size size, ThemeColors colors) {
     if (_duplicateGroups.isEmpty) {
       return Center(
         child: Padding(
@@ -505,13 +511,13 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
               Icon(
                 Icons.check_circle_outline,
                 size: size.width * 0.2,
-                color: Colors.green.withOpacity(0.7),
+                color: colors.success.withOpacity(0.7),
               ),
               SizedBox(height: size.height * 0.02),
               Text(
                 '¡Sin duplicados!',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: colors.textPrimary,
                   fontSize: size.width * 0.055,
                   fontWeight: FontWeight.bold,
                 ),
@@ -520,7 +526,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
               Text(
                 'No se encontraron fotos duplicadas\nen las $_totalPhotosAnalyzed fotos analizadas',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: colors.textTertiary,
                   fontSize: size.width * 0.035,
                 ),
                 textAlign: TextAlign.center,
@@ -529,7 +535,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C63FF),
+                  backgroundColor: colors.primary,
                   padding: EdgeInsets.symmetric(
                     horizontal: size.width * 0.08,
                     vertical: size.height * 0.018,
@@ -562,14 +568,14 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
         // Summary header
         Container(
           padding: EdgeInsets.all(size.width * 0.04),
-          color: const Color(0xFF16213E),
+          color: colors.surface,
           child: Column(
             children: [
               Row(
                 children: [
                   Icon(
                     Icons.content_copy,
-                    color: const Color(0xFFFFAB00),
+                    color: colors.warning,
                     size: size.width * 0.06,
                   ),
                   SizedBox(width: size.width * 0.03),
@@ -580,7 +586,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                         Text(
                           '${_duplicateGroups.length} grupos encontrados',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: colors.textPrimary,
                             fontSize: size.width * 0.04,
                             fontWeight: FontWeight.bold,
                           ),
@@ -588,7 +594,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                         Text(
                           '$totalDuplicates fotos duplicadas',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
+                            color: colors.textTertiary,
                             fontSize: size.width * 0.03,
                           ),
                         ),
@@ -601,7 +607,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                       vertical: size.height * 0.008,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.2),
+                      color: colors.successWithOpacity(0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Column(
@@ -609,7 +615,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                         Text(
                           '~${_formatBytes(_estimatedSpaceBytes)}',
                           style: TextStyle(
-                            color: Colors.green,
+                            color: colors.success,
                             fontSize: size.width * 0.035,
                             fontWeight: FontWeight.bold,
                           ),
@@ -617,7 +623,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                         Text(
                           'a liberar',
                           style: TextStyle(
-                            color: Colors.green.withOpacity(0.7),
+                            color: colors.success.withOpacity(0.7),
                             fontSize: size.width * 0.025,
                           ),
                         ),
@@ -632,14 +638,14 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                   children: [
                     Icon(
                       Icons.history,
-                      color: Colors.white.withOpacity(0.5),
+                      color: colors.textTertiary,
                       size: size.width * 0.035,
                     ),
                     SizedBox(width: size.width * 0.01),
                     Text(
                       'Resultados del ${_lastScanDate!.day}/${_lastScanDate!.month} ${_lastScanDate!.hour}:${_lastScanDate!.minute.toString().padLeft(2, '0')}',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                        color: colors.textTertiary,
                         fontSize: size.width * 0.028,
                       ),
                     ),
@@ -657,7 +663,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
             cacheExtent: 500, // Precargar items cercanos
             itemBuilder: (context, groupIndex) {
               final group = _duplicateGroups[groupIndex];
-              return _buildDuplicateGroup(group, groupIndex, size);
+              return _buildDuplicateGroup(group, groupIndex, size, colors);
             },
           ),
         ),
@@ -665,7 +671,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     );
   }
 
-  Widget _buildDuplicateGroup(List<Photo> group, int groupIndex, Size size) {
+  Widget _buildDuplicateGroup(List<Photo> group, int groupIndex, Size size, ThemeColors colors) {
     final selectedInGroup =
         group.where((p) => _selectedPhotos.contains(p.id)).length;
 
@@ -673,12 +679,12 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
       margin: EdgeInsets.only(bottom: size.height * 0.02),
       padding: EdgeInsets.all(size.width * 0.04),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: selectedInGroup > 0
-              ? Colors.red.withOpacity(0.5)
-              : Colors.white.withOpacity(0.1),
+              ? colors.dangerWithOpacity(0.5)
+              : colors.divider,
         ),
       ),
       child: Column(
@@ -695,13 +701,13 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                       vertical: size.height * 0.005,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFAB00).withOpacity(0.2),
+                      color: colors.warningWithOpacity(0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       'Grupo ${groupIndex + 1}',
                       style: TextStyle(
-                        color: const Color(0xFFFFAB00),
+                        color: colors.warning,
                         fontSize: size.width * 0.03,
                         fontWeight: FontWeight.bold,
                       ),
@@ -711,7 +717,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                   Text(
                     '${group.length} fotos similares',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
+                      color: colors.textSecondary,
                       fontSize: size.width * 0.032,
                     ),
                   ),
@@ -753,9 +759,9 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isSelected
-                            ? Colors.red
+                            ? colors.danger
                             : isFirst
-                                ? Colors.green
+                                ? colors.success
                                 : Colors.transparent,
                         width: 3,
                       ),
@@ -774,7 +780,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                         if (isSelected)
                           Container(
                             decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.4),
+                              color: colors.dangerWithOpacity(0.4),
                               borderRadius: BorderRadius.circular(9),
                             ),
                             child: Center(
@@ -795,7 +801,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                                 vertical: size.height * 0.003,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.green,
+                                color: colors.success,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -816,7 +822,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                             height: size.width * 0.06,
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? Colors.red
+                                  ? colors.danger
                                   : Colors.black.withOpacity(0.5),
                               shape: BoxShape.circle,
                               border: Border.all(
@@ -863,7 +869,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     });
   }
 
-  Future<void> _addSelectedToTrash() async {
+  Future<void> _addSelectedToTrash(ThemeColors colors) async {
     final trashProvider = context.read<TrashProvider>();
     final count = _selectedPhotos.length;
 
@@ -875,7 +881,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$count fotos movidas a papelera'),
-          backgroundColor: Colors.green,
+          backgroundColor: colors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),

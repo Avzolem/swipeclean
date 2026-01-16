@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../providers/photo_provider.dart';
+import '../providers/theme_provider.dart';
+import '../theme/app_colors.dart';
 import 'swipe_screen.dart';
 
 class AlbumsScreen extends StatefulWidget {
@@ -47,18 +49,22 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final themeProvider = context.watch<ThemeProvider>();
+    final colors = themeProvider.colors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: colors.textPrimary),
           onPressed: _isLoadingAlbum ? null : () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Álbumes',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: colors.textPrimary),
         ),
       ),
       body: Consumer<PhotoProvider>(
@@ -66,18 +72,20 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
           final albums = provider.albums;
 
           if (albums.isEmpty) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.white),
+            return Center(
+              child: CircularProgressIndicator(color: colors.primary),
             );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(size.width * 0.04),
             itemCount: albums.length,
             itemBuilder: (context, index) {
               final album = albums[index];
               return _AlbumTile(
                 album: album,
+                colors: colors,
+                size: size,
                 isLoading: _loadingAlbumId == album.id,
                 isDisabled: _isLoadingAlbum && _loadingAlbumId != album.id,
                 onTap: () => _onAlbumTap(album, provider),
@@ -92,12 +100,16 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
 
 class _AlbumTile extends StatefulWidget {
   final AssetPathEntity album;
+  final ThemeColors colors;
+  final Size size;
   final VoidCallback onTap;
   final bool isLoading;
   final bool isDisabled;
 
   const _AlbumTile({
     required this.album,
+    required this.colors,
+    required this.size,
     required this.onTap,
     this.isLoading = false,
     this.isDisabled = false,
@@ -144,9 +156,10 @@ class _AlbumTileState extends State<_AlbumTile> {
   @override
   Widget build(BuildContext context) {
     final isEnabled = _count > 0 && !widget.isDisabled && !widget.isLoading;
+    final thumbnailSize = widget.size.width * 0.18;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: widget.size.height * 0.015),
       child: Opacity(
         opacity: widget.isDisabled ? 0.5 : 1.0,
         child: Material(
@@ -155,14 +168,14 @@ class _AlbumTileState extends State<_AlbumTile> {
             onTap: isEnabled ? widget.onTap : null,
             borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(widget.size.width * 0.03),
               decoration: BoxDecoration(
-                color: const Color(0xFF16213E),
+                color: widget.colors.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: widget.isLoading
-                      ? const Color(0xFF6C63FF).withOpacity(0.5)
-                      : Colors.white.withOpacity(0.1),
+                      ? widget.colors.primaryWithOpacity(0.5)
+                      : widget.colors.divider,
                   width: widget.isLoading ? 2 : 1,
                 ),
               ),
@@ -170,10 +183,10 @@ class _AlbumTileState extends State<_AlbumTile> {
                 children: [
                   // Album thumbnail
                   Container(
-                    width: 70,
-                    height: 70,
+                    width: thumbnailSize,
+                    height: thumbnailSize,
                     decoration: BoxDecoration(
-                      color: Colors.grey[800],
+                      color: widget.colors.primaryWithOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     clipBehavior: Clip.antiAlias,
@@ -181,11 +194,11 @@ class _AlbumTileState extends State<_AlbumTile> {
                         ? Image.memory(_thumbnail!, fit: BoxFit.cover)
                         : Icon(
                             Icons.photo_album,
-                            color: Colors.white.withOpacity(0.3),
-                            size: 30,
+                            color: widget.colors.textTertiary,
+                            size: widget.size.width * 0.08,
                           ),
                   ),
-                  const SizedBox(width: 16),
+                  SizedBox(width: widget.size.width * 0.04),
 
                   // Album info
                   Expanded(
@@ -194,22 +207,22 @@ class _AlbumTileState extends State<_AlbumTile> {
                       children: [
                         Text(
                           widget.album.name.isEmpty ? 'Sin nombre' : widget.album.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
+                          style: TextStyle(
+                            color: widget.colors.textPrimary,
+                            fontSize: widget.size.width * 0.04,
                             fontWeight: FontWeight.w600,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: widget.size.height * 0.005),
                         Text(
                           widget.isLoading ? 'Cargando...' : '$_count fotos',
                           style: TextStyle(
                             color: widget.isLoading
-                                ? const Color(0xFF6C63FF)
-                                : Colors.white.withOpacity(0.6),
-                            fontSize: 14,
+                                ? widget.colors.primary
+                                : widget.colors.textTertiary,
+                            fontSize: widget.size.width * 0.035,
                           ),
                         ),
                       ],
@@ -218,19 +231,19 @@ class _AlbumTileState extends State<_AlbumTile> {
 
                   // Arrow or loading indicator
                   if (widget.isLoading)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
+                    SizedBox(
+                      width: widget.size.width * 0.045,
+                      height: widget.size.width * 0.045,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Color(0xFF6C63FF),
+                        color: widget.colors.primary,
                       ),
                     )
                   else
                     Icon(
                       Icons.arrow_forward_ios,
-                      color: Colors.white.withOpacity(0.3),
-                      size: 18,
+                      color: widget.colors.textTertiary,
+                      size: widget.size.width * 0.045,
                     ),
                 ],
               ),
