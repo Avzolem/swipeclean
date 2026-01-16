@@ -32,10 +32,56 @@ class _SwipeScreenState extends State<SwipeScreen> {
   // Fotos capturadas al momento de salir (para evitar flashazo)
   List<Photo>? _frozenPhotos;
 
+  // Feedback visual para botones
+  String? _feedbackMessage;
+  Color? _feedbackColor;
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Muestra feedback visual temporal
+  void _showFeedback(String message, Color color) {
+    setState(() {
+      _feedbackMessage = message;
+      _feedbackColor = color;
+    });
+
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) {
+        setState(() {
+          _feedbackMessage = null;
+          _feedbackColor = null;
+        });
+      }
+    });
+  }
+
+  /// Botón eliminar con feedback
+  void _onDeletePressed() {
+    _showFeedback('ELIMINAR', Colors.red);
+    Future.delayed(const Duration(milliseconds: 150), () {
+      _controller.swipe(CardSwiperDirection.left);
+    });
+  }
+
+  /// Botón conservar con feedback
+  void _onKeepPressed() {
+    _showFeedback('CONSERVAR', Colors.green);
+    Future.delayed(const Duration(milliseconds: 150), () {
+      _controller.swipe(CardSwiperDirection.right);
+    });
+  }
+
+  /// Botón undo con feedback
+  void _onUndoPressed() {
+    if (_actionHistory.isEmpty) return;
+    _showFeedback('DESHACER', Colors.amber);
+    Future.delayed(const Duration(milliseconds: 150), () {
+      _controller.undo();
+    });
   }
 
   /// Método centralizado para salir de la pantalla sin flashazo
@@ -111,10 +157,12 @@ class _SwipeScreenState extends State<SwipeScreen> {
                       ),
                     ),
 
-                    // Card area
+                    // Card area con overlay de feedback
                     SizedBox(
                       height: cardHeight,
-                      child: CardSwiper(
+                      child: Stack(
+                        children: [
+                          CardSwiper(
                         controller: _controller,
                         cardsCount: photos.length,
                         numberOfCardsDisplayed: photos.length > 2 ? 3 : photos.length,
@@ -199,6 +247,38 @@ class _SwipeScreenState extends State<SwipeScreen> {
                           );
                         },
                       ),
+                          // Overlay de feedback para botones
+                          if (_feedbackMessage != null)
+                            Center(
+                              child: AnimatedOpacity(
+                                opacity: _feedbackMessage != null ? 1.0 : 0.0,
+                                duration: const Duration(milliseconds: 200),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                    vertical: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: _feedbackColor ?? Colors.white,
+                                      width: 3,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _feedbackMessage ?? '',
+                                    style: TextStyle(
+                                      color: _feedbackColor ?? Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
 
                     // Action buttons
@@ -210,14 +290,14 @@ class _SwipeScreenState extends State<SwipeScreen> {
                           _buildActionButton(
                             Icons.close,
                             Colors.red,
-                            () => _controller.swipe(CardSwiperDirection.left),
+                            _onDeletePressed,
                             size,
                           ),
                           _buildActionButton(
                             Icons.undo,
                             Colors.amber,
                             _actionHistory.isNotEmpty
-                                ? () => _controller.undo()
+                                ? _onUndoPressed
                                 : null,
                             size,
                           ),
@@ -232,7 +312,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                           _buildActionButton(
                             Icons.favorite,
                             Colors.green,
-                            () => _controller.swipe(CardSwiperDirection.right),
+                            _onKeepPressed,
                             size,
                           ),
                         ],
