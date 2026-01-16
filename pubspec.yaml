@@ -1,7 +1,7 @@
 name: swipeclean
 description: App para limpiar fotos del dispositivo con swipes estilo Tinder.
 publish_to: 'none'
-version: 1.0.4+5
+version: 1.0.6+7
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -35,7 +35,7 @@ flutter:
 
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
   image_path: "assets/icon_full.png"
   adaptive_icon_background: "#1A1A2E"
   adaptive_icon_foreground: "assets/icon_full.png"

@@ -846,6 +846,67 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
               },
             ),
           ),
+          // Botones de acción rápida para el grupo
+          SizedBox(height: size.height * 0.012),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _selectAllExceptFirst(group),
+                  icon: Icon(
+                    Icons.check_circle_outline,
+                    size: size.width * 0.04,
+                    color: colors.success,
+                  ),
+                  label: Text(
+                    'Conservar primera',
+                    style: TextStyle(
+                      fontSize: size.width * 0.028,
+                      color: colors.success,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: colors.successWithOpacity(0.1),
+                    side: BorderSide(color: colors.successWithOpacity(0.5)),
+                    padding: EdgeInsets.symmetric(
+                      vertical: size.height * 0.01,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: size.width * 0.02),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _selectAllInGroup(group),
+                  icon: Icon(
+                    Icons.delete_sweep,
+                    size: size.width * 0.04,
+                    color: colors.danger,
+                  ),
+                  label: Text(
+                    'Eliminar grupo',
+                    style: TextStyle(
+                      fontSize: size.width * 0.028,
+                      color: colors.danger,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: colors.dangerWithOpacity(0.1),
+                    side: BorderSide(color: colors.dangerWithOpacity(0.5)),
+                    padding: EdgeInsets.symmetric(
+                      vertical: size.height * 0.01,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -865,6 +926,14 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     setState(() {
       for (int i = 1; i < group.length; i++) {
         _selectedPhotos.add(group[i].id);
+      }
+    });
+  }
+
+  void _selectAllInGroup(List<Photo> group) {
+    setState(() {
+      for (final photo in group) {
+        _selectedPhotos.add(photo.id);
       }
     });
   }

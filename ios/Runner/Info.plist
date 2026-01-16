@@ -50,6 +50,9 @@
 		<string>SwipeClean necesita acceso a tus fotos para ayudarte a limpiar tu galería</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>SwipeClean necesita acceso para guardar fotos</string>
+		<!-- iOS 14+: Evita alertas repetidas de acceso limitado -->
+		<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
+		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
 	</dict>
