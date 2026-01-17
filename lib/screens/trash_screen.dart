@@ -19,7 +19,9 @@ class _TrashScreenState extends State<TrashScreen> {
     super.initState();
     // Recalcular espacio al entrar (por si cambió)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TrashProvider>().calculateSpace();
+      if (mounted) {
+        context.read<TrashProvider>().calculateSpace();
+      }
     });
   }
 

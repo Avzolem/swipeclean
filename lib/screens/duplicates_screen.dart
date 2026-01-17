@@ -48,19 +48,21 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
 
     if (cachedResult != null && cachedResult.groups.isNotEmpty) {
       // Tenemos resultados en caché, preguntar al usuario
-      if (mounted) {
-        final themeProvider = context.read<ThemeProvider>();
-        final colors = themeProvider.colors;
-        final useCache = await _showCacheDialog(cachedResult, colors);
-        if (useCache == true) {
-          await _loadCachedResults(cachedResult);
-          return;
-        }
+      if (!mounted) return;
+      final themeProvider = context.read<ThemeProvider>();
+      final colors = themeProvider.colors;
+      final useCache = await _showCacheDialog(cachedResult, colors);
+      if (!mounted) return;
+      if (useCache == true) {
+        await _loadCachedResults(cachedResult);
+        return;
       }
     }
 
     // Si no hay caché o el usuario quiere re-escanear
-    _findDuplicates();
+    if (mounted) {
+      _findDuplicates();
+    }
   }
 
   Future<bool?> _showCacheDialog(DuplicateResult cached, ThemeColors colors) {
@@ -118,11 +120,14 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
   }
 
   Future<void> _loadCachedResults(DuplicateResult cached) async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _statusText = 'Cargando resultados...';
     });
 
+    // Guardar referencia antes de cualquier operación async
     final photoProvider = context.read<PhotoProvider>();
     final photos = photoProvider.photos;
 
@@ -162,11 +167,14 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
   }
 
   Future<void> _findDuplicates() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _isUsingCachedResults = false;
     });
 
+    // Guardar referencia antes de cualquier operación async
     final photoProvider = context.read<PhotoProvider>();
     final photos = photoProvider.photos;
 
@@ -211,8 +219,14 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
         // Usar dimensiones como aproximación del tamaño
         final width = group[i].asset.width;
         final height = group[i].asset.height;
-        // Aproximación: 3 bytes por pixel para JPEG comprimido
-        totalBytes += (width * height * 0.5).toInt();
+        // Validar que width y height sean positivos
+        if (width > 0 && height > 0) {
+          // Aproximación: 0.5 bytes por pixel para JPEG comprimido
+          totalBytes += (width * height * 0.5).toInt();
+        } else {
+          // Fallback: asumir 1MB para fotos sin dimensiones
+          totalBytes += 1024 * 1024;
+        }
       }
     }
     _estimatedSpaceBytes = totalBytes;
@@ -242,7 +256,13 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
         if (_selectedPhotos.contains(photo.id)) {
           final width = photo.asset.width;
           final height = photo.asset.height;
-          bytes += (width * height * 0.5).toInt();
+          // Validar que width y height sean positivos
+          if (width > 0 && height > 0) {
+            bytes += (width * height * 0.5).toInt();
+          } else {
+            // Fallback: asumir 1MB para fotos sin dimensiones
+            bytes += 1024 * 1024;
+          }
         }
       }
     }
@@ -932,6 +952,9 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
   }
 
   Future<void> _addSelectedToTrash(ThemeColors colors) async {
+    if (!mounted) return;
+
+    // Guardar referencia antes de cualquier operación async
     final trashProvider = context.read<TrashProvider>();
     final count = _selectedPhotos.length;
 

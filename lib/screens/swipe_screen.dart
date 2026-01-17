@@ -5,9 +5,10 @@ import 'package:share_plus/share_plus.dart';
 import '../providers/photo_provider.dart';
 import '../providers/trash_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/albums_provider.dart';
 import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
-import '../widgets/swipe_card.dart';
+import '../widgets/swipe_card.dart' show SwipeCard, ImagePreloadCache;
 import '../widgets/swipe_tutorial.dart';
 import '../models/photo.dart';
 import 'duplicates_screen.dart';
@@ -22,6 +23,9 @@ class SwipeScreen extends StatefulWidget {
 class _SwipeScreenState extends State<SwipeScreen> {
   final CardSwiperController _controller = CardSwiperController();
   final StorageService _storageService = StorageService();
+
+  // Referencia al caché de imágenes para limpiarlo al salir
+  final _imageCache = ImagePreloadCache();
 
   // Historial de acciones para poder deshacer correctamente
   final List<_SwipeAction> _actionHistory = [];
@@ -70,6 +74,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    // Limpiar caché de imágenes para liberar memoria
+    _imageCache.clear();
     super.dispose();
   }
 
@@ -179,7 +185,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                                 Expanded(
                                   child: Center(
                                     child: Text(
-                                      '${photos.length - _currentIndex} fotos restantes',
+                                      '${(photos.length - _currentIndex).clamp(0, photos.length)} fotos restantes',
                                       style: TextStyle(
                                         color: colors.textPrimary,
                                         fontSize: size.width * 0.04,
@@ -187,7 +193,15 @@ class _SwipeScreenState extends State<SwipeScreen> {
                                     ),
                                   ),
                                 ),
-                                SizedBox(width: size.width * 0.12),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.info_outline,
+                                    color: colors.textSecondary,
+                                  ),
+                                  onPressed: () {
+                                    setState(() => _showTutorial = true);
+                                  },
+                                ),
                               ],
                             ),
                           ),
@@ -198,8 +212,10 @@ class _SwipeScreenState extends State<SwipeScreen> {
                             child: Stack(
                               children: [
                                 CardSwiper(
+                                  key: ValueKey('swiper_${photos.length}'),
                                   controller: _controller,
                                   cardsCount: photos.length,
+                                  initialIndex: 0,
                                   numberOfCardsDisplayed: photos.length > 2 ? 3 : photos.length,
                                   backCardOffset: const Offset(0, 25),
                                   padding: EdgeInsets.symmetric(
@@ -343,9 +359,14 @@ class _SwipeScreenState extends State<SwipeScreen> {
                                 _buildActionButton(
                                   Icons.share,
                                   colors.info,
-                                  _isSharing || _currentIndex >= photos.length
+                                  _isSharing || _currentIndex < 0 || _currentIndex >= photos.length
                                       ? null
-                                      : () => _sharePhoto(photos[_currentIndex]),
+                                      : () {
+                                          // Validación adicional antes de compartir
+                                          if (_currentIndex < photos.length) {
+                                            _sharePhoto(photos[_currentIndex]);
+                                          }
+                                        },
                                   size,
                                 ),
                                 _buildActionButton(
@@ -622,6 +643,11 @@ class _SwipeScreenState extends State<SwipeScreen> {
     final duplicateCount = hasDuplicates
         ? duplicateResult.groups.fold<int>(0, (sum, g) => sum + g.length - 1)
         : 0;
+
+    // Actualizar estado de álbumes completados inmediatamente
+    final photoProvider = context.read<PhotoProvider>();
+    final albumsProvider = context.read<AlbumsProvider>();
+    albumsProvider.recalculateCompletedStatus(photoProvider.albums);
 
     showDialog(
       context: context,

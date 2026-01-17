@@ -74,31 +74,44 @@ class AlbumsProvider extends ChangeNotifier {
         int reviewedCount = 0;
 
         if (count > 0) {
-          final assets = await album.getAssetListRange(start: 0, end: count);
+          // Obtener assets para thumbnail y cálculo de reviewedCount
+          // Limitamos a los primeros 100 para balance entre precisión y rendimiento
+          final assetsToCheck = count > 100 ? 100 : count;
+          final assets = await album.getAssetListRange(start: 0, end: assetsToCheck);
 
-          // Obtener thumbnail del primer asset
           if (assets.isNotEmpty) {
+            // Obtener thumbnail del primer asset
             thumbnail = await assets.first.thumbnailDataWithSize(
               const ThumbnailSize(200, 200),
             );
-          }
 
-          // Contar cuántas fotos están revisadas (en reviewed o en trash)
-          for (final asset in assets) {
-            if (_storageService.isReviewed(asset.id) ||
-                _storageService.isInTrash(asset.id)) {
-              reviewedCount++;
+            // Calcular reviewedCount (extrapolando si hay más de 100)
+            int reviewed = 0;
+            for (final asset in assets) {
+              if (_storageService.isReviewed(asset.id) ||
+                  _storageService.isInTrash(asset.id)) {
+                reviewed++;
+              }
+            }
+
+            // Si tenemos menos de 100 fotos, es el conteo exacto
+            // Si tenemos más, extrapolamos proporcionalmente
+            if (count <= 100) {
+              reviewedCount = reviewed;
+            } else {
+              reviewedCount = (reviewed * count / assetsToCheck).round();
             }
           }
         }
 
+        // Guardar en cache con reviewedCount calculado
         _cache[album.id] = AlbumInfo(
           count: count,
           thumbnail: thumbnail,
           reviewedCount: reviewedCount,
         );
       } catch (e) {
-        // Ignorar errores silenciosamente
+        // Error al cargar álbum (permisos, álbum eliminado, etc.)
       }
 
       _loadingIds.remove(album.id);
@@ -112,7 +125,10 @@ class AlbumsProvider extends ChangeNotifier {
   }
 
   /// Recalcula solo el estado de completado sin recargar thumbnails
+  /// Optimizado: solo notifica una vez al final para evitar múltiples rebuilds
   Future<void> recalculateCompletedStatus(List<AssetPathEntity> albums) async {
+    bool hasChanges = false;
+
     for (final album in albums) {
       final existingInfo = _cache[album.id];
       if (existingInfo == null) continue;
@@ -134,11 +150,16 @@ class AlbumsProvider extends ChangeNotifier {
         // Solo actualizar si cambió el reviewedCount
         if (existingInfo.reviewedCount != reviewedCount) {
           _cache[album.id] = existingInfo.copyWithReviewedCount(reviewedCount);
-          notifyListeners();
+          hasChanges = true;
         }
       } catch (e) {
-        // Ignorar errores
+        // Ignorar errores - el álbum puede no existir
       }
+    }
+
+    // Notificar solo una vez al final si hubo cambios
+    if (hasChanges) {
+      notifyListeners();
     }
   }
 

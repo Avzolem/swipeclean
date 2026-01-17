@@ -214,13 +214,15 @@ class DuplicateDetector {
         // Guardar en caché de sesión
         _sessionHashCache[photo.id] = hash;
 
-        // Guardar persistente (asíncrono)
+        // Guardar persistente (await para asegurar consistencia)
         final size = (photo.asset.size.width * photo.asset.size.height).toInt();
-        _storageService.saveHash(photo.id, hash, size);
+        await _storageService.saveHash(photo.id, hash, size);
       }
 
       return hash;
     } catch (e) {
+      // Error al obtener thumbnail o calcular hash (foto corrupta, sin permisos, etc.)
+      // Se ignora silenciosamente para no interrumpir el análisis de otras fotos
       return null;
     }
   }
@@ -256,6 +258,8 @@ class DuplicateDetector {
 
       return hash;
     } catch (e) {
+      // Error al decodificar imagen en Isolate (formato no soportado, datos corruptos)
+      // Retornar null para que esta foto se excluya del análisis de duplicados
       return null;
     }
   }

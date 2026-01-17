@@ -67,10 +67,18 @@ class TrashProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Calcula espacio para items seleccionados (proporción)
+  /// Calcula espacio para items seleccionados
+  /// Usa los datos almacenados directamente para evitar problemas de sincronización
   int calculateSelectedSpace() {
-    if (trashCount == 0) return 0;
-    return (_estimatedSpaceBytes * selectedCount) ~/ trashCount;
+    if (_selectedItems.isEmpty) return 0;
+
+    int totalBytes = 0;
+    for (final item in _trashItems) {
+      if (_selectedItems.contains(item.photoId)) {
+        totalBytes += item.estimatedSizeBytes;
+      }
+    }
+    return totalBytes;
   }
 
   void loadTrash() {
@@ -81,6 +89,11 @@ class TrashProvider extends ChangeNotifier {
     calculateSpace();
   }
 
+  /// Agrega una foto a la papelera
+  /// NOTA: Este método tiene coupling intencional con markAsReviewed() porque
+  /// toda foto en papelera debe marcarse como revisada para evitar que aparezca
+  /// de nuevo en el flujo de swipe. Si se necesita agregar a papelera sin marcar
+  /// como revisada, crear un método separado.
   Future<void> addToTrash(
     String photoId, {
     String? thumbnailPath,
@@ -114,14 +127,15 @@ class TrashProvider extends ChangeNotifier {
   }
 
   /// Método específico para deshacer la acción de agregar a papelera
-  /// No dispara notifyListeners para evitar rebuilds prematuros del CardSwiper
+  /// Usa notificación retrasada para evitar race conditions sin afectar la UI del CardSwiper
   Future<void> undoAddToTrash(String photoId) async {
     await _storageService.removeFromTrash(photoId);
     await _storageService.unmarkAsReviewed(photoId);
-    // Actualizar lista local sin notificar
+    // Actualizar lista local
     _trashItems = _storageService.getTrashItems();
     _trashItems.sort((a, b) => b.addedAt.compareTo(a.addedAt));
-    // NO llamar notifyListeners aquí - el CardSwiper manejará el estado
+    // Notificar con delay mínimo para evitar conflicto con CardSwiper pero mantener consistencia
+    Future.microtask(() => notifyListeners());
   }
 
   Future<int> restoreSelected() async {

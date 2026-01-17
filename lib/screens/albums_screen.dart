@@ -18,6 +18,16 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
   bool _isLoadingAlbum = false;
   String? _loadingAlbumId;
 
+  Future<void> _onRefresh() async {
+    final albumsProvider = context.read<AlbumsProvider>();
+    final photoProvider = context.read<PhotoProvider>();
+
+    // Limpiar cache de álbumes y recalcular estado
+    albumsProvider.clearCache();
+    // Recargar lista de álbumes
+    await photoProvider.forceReload();
+  }
+
   Future<void> _onAlbumTap(AssetPathEntity album, PhotoProvider provider) async {
     if (_isLoadingAlbum) return;
 
@@ -81,10 +91,13 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
             );
           }
 
-          return ListView.builder(
-            padding: EdgeInsets.all(size.width * 0.04),
-            itemCount: albums.length,
-            itemBuilder: (context, index) {
+          return RefreshIndicator(
+            onRefresh: _onRefresh,
+            color: colors.primary,
+            child: ListView.builder(
+              padding: EdgeInsets.all(size.width * 0.04),
+              itemCount: albums.length,
+              itemBuilder: (context, index) {
               final album = albums[index];
 
               // Encolar carga cuando el tile se construye
@@ -103,6 +116,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 isCompleted: info?.isCompleted ?? false,
               );
             },
+            ),
           );
         },
       ),
@@ -150,6 +164,8 @@ class _AlbumTile extends StatelessWidget {
           child: InkWell(
             onTap: isEnabled ? onTap : null,
             borderRadius: BorderRadius.circular(16),
+            splashColor: colors.primaryWithOpacity(0.2),
+            highlightColor: colors.primaryWithOpacity(0.1),
             child: Container(
               padding: EdgeInsets.all(size.width * 0.03),
               decoration: BoxDecoration(

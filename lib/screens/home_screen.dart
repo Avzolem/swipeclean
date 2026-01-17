@@ -704,10 +704,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ThemeColors colors,
     Size size,
   ) {
+    final isDisabled = trashProvider.reviewedCount == 0;
+    final iconColor = isDisabled ? colors.textTertiary.withOpacity(0.4) : colors.textSecondary;
+    final textColor = isDisabled ? colors.textTertiary.withOpacity(0.4) : colors.textSecondary;
+    final subtextColor = isDisabled ? colors.textTertiary.withOpacity(0.3) : colors.textTertiary;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _showResetDialog(context, size, photoProvider, trashProvider, colors),
+        onTap: isDisabled
+            ? null
+            : () => _showResetDialog(context, size, photoProvider, trashProvider, colors),
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: EdgeInsets.symmetric(
@@ -715,7 +722,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             horizontal: size.width * 0.03,
           ),
           decoration: BoxDecoration(
-            color: colors.textTertiary.withOpacity(0.08),
+            color: colors.textTertiary.withOpacity(isDisabled ? 0.04 : 0.08),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -723,14 +730,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               Icon(
                 Icons.refresh_rounded,
-                color: colors.textSecondary,
+                color: iconColor,
                 size: size.width * 0.1,
               ),
               SizedBox(height: size.height * 0.005),
               Text(
                 'Reiniciar',
                 style: TextStyle(
-                  color: colors.textSecondary,
+                  color: textColor,
                   fontSize: size.width * 0.03,
                   fontWeight: FontWeight.w500,
                 ),
@@ -738,7 +745,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               Text(
                 'Limpieza',
                 style: TextStyle(
-                  color: colors.textTertiary,
+                  color: subtextColor,
                   fontSize: size.width * 0.028,
                 ),
               ),
@@ -794,105 +801,120 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
-        actionsAlignment: MainAxisAlignment.spaceEvenly,
         actionsPadding: EdgeInsets.only(
           left: size.width * 0.04,
           right: size.width * 0.04,
           bottom: size.height * 0.02,
         ),
         actions: [
-          // Botón Cancelar - fondo rojo claro
-          OutlinedButton(
-            onPressed: () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              backgroundColor: colors.danger.withOpacity(0.1),
-              side: BorderSide(color: colors.danger.withOpacity(0.5)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: size.width * 0.04,
-                vertical: size.height * 0.012,
-              ),
-            ),
-            child: Text(
-              'Cancelar',
-              style: TextStyle(
-                color: colors.danger,
-                fontSize: size.width * 0.035,
-              ),
-            ),
-          ),
-          // Botón Solo conservadas - fondo verde claro
-          OutlinedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await trashProvider.resetKeptPhotosOnly();
-              photoProvider.refresh();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Fotos conservadas reiniciadas (papelera intacta)'),
-                    backgroundColor: colors.success,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          // Columna para que los botones tengan el mismo ancho
+          SizedBox(
+            width: double.infinity,
+            child: Column(
+              children: [
+                // Botón Cancelar - fondo rojo claro
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: colors.danger.withOpacity(0.1),
+                      side: BorderSide(color: colors.danger.withOpacity(0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        vertical: size.height * 0.015,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancelar',
+                      style: TextStyle(
+                        color: colors.danger,
+                        fontSize: size.width * 0.038,
+                      ),
+                    ),
                   ),
-                );
-              }
-            },
-            style: OutlinedButton.styleFrom(
-              backgroundColor: colors.success.withOpacity(0.1),
-              side: BorderSide(color: colors.success.withOpacity(0.5)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: size.width * 0.04,
-                vertical: size.height * 0.012,
-              ),
-            ),
-            child: Text(
-              'Conservadas',
-              style: TextStyle(
-                color: colors.success,
-                fontSize: size.width * 0.035,
-              ),
-            ),
-          ),
-          // Botón Todo - fondo warning sólido
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await trashProvider.resetAll();
-              photoProvider.refresh();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Todo reiniciado'),
-                    backgroundColor: colors.warning,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                SizedBox(height: size.height * 0.01),
+                // Botón Solo conservadas - fondo verde claro
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await trashProvider.resetKeptPhotosOnly();
+                      photoProvider.refresh();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Fotos conservadas reiniciadas (papelera intacta)'),
+                            backgroundColor: colors.success,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        );
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: colors.success.withOpacity(0.1),
+                      side: BorderSide(color: colors.success.withOpacity(0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        vertical: size.height * 0.015,
+                      ),
+                    ),
+                    child: Text(
+                      'Conservadas',
+                      style: TextStyle(
+                        color: colors.success,
+                        fontSize: size.width * 0.038,
+                      ),
+                    ),
                   ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colors.warning,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: size.width * 0.05,
-                vertical: size.height * 0.012,
-              ),
-            ),
-            child: Text(
-              'Todo',
-              style: TextStyle(
-                fontSize: size.width * 0.035,
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
+                ),
+                SizedBox(height: size.height * 0.01),
+                // Botón Todo - fondo warning outlined
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await trashProvider.resetAll();
+                      photoProvider.refresh();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Todo reiniciado'),
+                            backgroundColor: colors.warning,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        );
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: colors.warning.withOpacity(0.1),
+                      side: BorderSide(color: colors.warning.withOpacity(0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        vertical: size.height * 0.015,
+                      ),
+                    ),
+                    child: Text(
+                      'Todo (Incluyendo papelera)',
+                      style: TextStyle(
+                        color: colors.warning,
+                        fontSize: size.width * 0.038,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
