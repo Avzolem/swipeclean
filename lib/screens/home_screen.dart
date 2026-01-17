@@ -612,7 +612,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     VoidCallback? onTap,
     String? extraInfo,
   }) {
+    // Altura fija para que todas las cards sean iguales
+    final cardHeight = size.height * 0.11;
+
     final content = Container(
+      height: cardHeight,
       padding: EdgeInsets.all(size.width * 0.04),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
@@ -620,6 +624,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Icono y número en línea
           Row(
@@ -630,7 +635,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               Text(
                 value,
                 style: TextStyle(
-                  color: color,
+                  color: colors.textPrimary,
                   fontSize: size.width * 0.065,
                   fontWeight: FontWeight.bold,
                 ),
@@ -639,25 +644,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           SizedBox(height: size.height * 0.005),
           // Label abajo
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontSize: size.width * 0.03,
-                  ),
-                ),
-              ),
-              // Indicador sutil si es clickeable
-              if (onTap != null)
-                Icon(
-                  Icons.arrow_forward_ios,
-                  color: colors.textTertiary,
-                  size: size.width * 0.03,
-                ),
-            ],
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: size.width * 0.03,
+            ),
           ),
           // Info extra (ej: espacio a liberar)
           if (extraInfo != null) ...[

@@ -4,6 +4,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../providers/photo_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
 import 'swipe_screen.dart';
 
@@ -15,6 +16,7 @@ class AlbumsScreen extends StatefulWidget {
 }
 
 class _AlbumsScreenState extends State<AlbumsScreen> {
+  final StorageService _storageService = StorageService();
   bool _isLoadingAlbum = false;
   String? _loadingAlbumId;
 
@@ -39,6 +41,10 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
           MaterialPageRoute(builder: (_) => const SwipeScreen()),
         ).then((_) {
           provider.clearAlbumFilter();
+          // Recalcular solo el estado de completado (sin recargar thumbnails)
+          if (mounted) {
+            _recalculateCompletedStatus();
+          }
         });
       }
     } finally {
@@ -58,6 +64,41 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
 
     _loadQueue.add(album.id);
     _processQueue();
+  }
+
+  /// Recalcula solo el estado de completado sin recargar thumbnails
+  Future<void> _recalculateCompletedStatus() async {
+    final provider = context.read<PhotoProvider>();
+
+    for (final album in provider.albums) {
+      final existingInfo = _albumInfoCache[album.id];
+      if (existingInfo == null) continue;
+
+      try {
+        final assets = await album.getAssetListRange(start: 0, end: existingInfo.count);
+        int reviewedCount = 0;
+
+        for (final asset in assets) {
+          if (_storageService.isReviewed(asset.id) ||
+              _storageService.isInTrash(asset.id)) {
+            reviewedCount++;
+          }
+        }
+
+        // Solo actualizar si cambió el reviewedCount
+        if (existingInfo.reviewedCount != reviewedCount && mounted) {
+          setState(() {
+            _albumInfoCache[album.id] = _AlbumInfo(
+              count: existingInfo.count,
+              thumbnail: existingInfo.thumbnail,
+              reviewedCount: reviewedCount,
+            );
+          });
+        }
+      } catch (e) {
+        // Ignorar errores
+      }
+    }
   }
 
   /// Procesa la cola de carga de forma escalonada
@@ -82,19 +123,34 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       try {
         final count = await album.assetCountAsync;
         Uint8List? thumbnail;
+        int reviewedCount = 0;
 
         if (count > 0) {
-          final assets = await album.getAssetListRange(start: 0, end: 1);
+          final assets = await album.getAssetListRange(start: 0, end: count);
+
+          // Obtener thumbnail del primer asset
           if (assets.isNotEmpty) {
             thumbnail = await assets.first.thumbnailDataWithSize(
               const ThumbnailSize(200, 200),
             );
           }
+
+          // Contar cuántas fotos están revisadas (en reviewed o en trash)
+          for (final asset in assets) {
+            if (_storageService.isReviewed(asset.id) ||
+                _storageService.isInTrash(asset.id)) {
+              reviewedCount++;
+            }
+          }
         }
 
         if (mounted) {
           setState(() {
-            _albumInfoCache[albumId] = _AlbumInfo(count: count, thumbnail: thumbnail);
+            _albumInfoCache[albumId] = _AlbumInfo(
+              count: count,
+              thumbnail: thumbnail,
+              reviewedCount: reviewedCount,
+            );
           });
         }
       } catch (e) {
@@ -157,6 +213,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 isDisabled: _isLoadingAlbum && _loadingAlbumId != album.id,
                 onTap: () => _onAlbumTap(album, provider),
                 cachedInfo: info,
+                isCompleted: info?.isCompleted ?? false,
               );
             },
           );
@@ -170,8 +227,12 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
 class _AlbumInfo {
   final int count;
   final Uint8List? thumbnail;
+  final int reviewedCount; // Cuántas fotos están revisadas
 
-  _AlbumInfo({required this.count, this.thumbnail});
+  _AlbumInfo({required this.count, this.thumbnail, this.reviewedCount = 0});
+
+  /// El álbum está completo si todas sus fotos fueron revisadas
+  bool get isCompleted => count > 0 && reviewedCount >= count;
 }
 
 class _AlbumTile extends StatelessWidget {
@@ -182,6 +243,7 @@ class _AlbumTile extends StatelessWidget {
   final bool isLoading;
   final bool isDisabled;
   final _AlbumInfo? cachedInfo;
+  final bool isCompleted;
 
   const _AlbumTile({
     required this.album,
@@ -191,6 +253,7 @@ class _AlbumTile extends StatelessWidget {
     this.isLoading = false,
     this.isDisabled = false,
     this.cachedInfo,
+    this.isCompleted = false,
   });
 
   @override
@@ -277,6 +340,17 @@ class _AlbumTile extends StatelessWidget {
                       ],
                     ),
                   ),
+
+                  // Check icon if completed
+                  if (isCompleted && !isLoading)
+                    Padding(
+                      padding: EdgeInsets.only(right: size.width * 0.02),
+                      child: Icon(
+                        Icons.check_circle,
+                        color: colors.success,
+                        size: size.width * 0.055,
+                      ),
+                    ),
 
                   // Arrow or loading indicator
                   if (isLoading)

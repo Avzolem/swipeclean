@@ -463,6 +463,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
   void _showResetDialog(BuildContext context, Size size, ThemeColors colors) {
     final trashProvider = context.read<TrashProvider>();
     final photoProvider = context.read<PhotoProvider>();
+    final selectedAlbum = photoProvider.selectedAlbum;
+    final hasAlbum = selectedAlbum != null;
 
     showDialog(
       context: context,
@@ -474,15 +476,23 @@ class _SwipeScreenState extends State<SwipeScreen> {
           style: TextStyle(color: colors.textPrimary, fontSize: size.width * 0.045),
         ),
         content: Text(
-          '¿Qué deseas hacer?',
+          hasAlbum
+              ? '¿Qué deseas reiniciar del álbum "${selectedAlbum.name}"?'
+              : '¿Qué deseas hacer?',
           style: TextStyle(color: colors.textSecondary, fontSize: size.width * 0.035),
         ),
         actions: [
-          // Solo revisadas (conservadas)
+          // Este álbum / Solo conservadas
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              await trashProvider.resetReviewProgress();
+              if (hasAlbum) {
+                // Reiniciar solo las fotos del álbum actual
+                final albumPhotoIds = photoProvider.photos.map((p) => p.id).toList();
+                await trashProvider.resetAlbum(albumPhotoIds);
+              } else {
+                await trashProvider.resetReviewProgress();
+              }
               photoProvider.refresh();
               setState(() {
                 _currentIndex = 0;
@@ -492,11 +502,11 @@ class _SwipeScreenState extends State<SwipeScreen> {
               });
             },
             child: Text(
-              'Solo conservadas',
+              hasAlbum ? 'Este álbum' : 'Solo conservadas',
               style: TextStyle(fontSize: size.width * 0.032),
             ),
           ),
-          // Todo (conservadas + papelera)
+          // Todo (incluye papelera)
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);

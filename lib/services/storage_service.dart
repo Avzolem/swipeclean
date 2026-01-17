@@ -204,4 +204,14 @@ class StorageService {
   Future<void> resetDuplicatesNotification() async {
     await _settingsBox?.put('duplicates_notification_shown', false);
   }
+
+  /// Reinicia solo las fotos de un álbum específico
+  Future<void> resetAlbumPhotos(List<String> photoIds) async {
+    for (final photoId in photoIds) {
+      // Quitar de revisadas
+      await _reviewedBox?.delete(photoId);
+      // Quitar de papelera si está ahí
+      await _trashBox?.delete(photoId);
+    }
+  }
 }

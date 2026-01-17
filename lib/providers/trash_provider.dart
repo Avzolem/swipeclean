@@ -191,4 +191,11 @@ class TrashProvider extends ChangeNotifier {
     _selectedItems.clear();
     notifyListeners();
   }
+
+  /// Reinicia solo las fotos de un álbum específico
+  Future<void> resetAlbum(List<String> photoIds) async {
+    await _storageService.resetAlbumPhotos(photoIds);
+    // Recargar papelera porque algunas fotos pueden haber sido quitadas
+    loadTrash();
+  }
 }

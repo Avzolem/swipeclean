@@ -96,7 +96,7 @@ class _LoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: AppColors.darkBackground,
       body: Center(
         child: Column(
@@ -107,8 +107,8 @@ class _LoadingScreen extends StatelessWidget {
               size: 80,
               color: AppColors.primary,
             ),
-            const SizedBox(height: 24),
-            const Text(
+            SizedBox(height: 24),
+            Text(
               'SwipeClean',
               style: TextStyle(
                 color: Colors.white,
@@ -116,7 +116,7 @@ class _LoadingScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: 32),
             CircularProgressIndicator(
               color: AppColors.primary,
             ),
