@@ -153,19 +153,34 @@ class PhotoProvider extends ChangeNotifier {
     try {
       const batchSize = 500;
       int current = start;
+      List<Photo> allLoadedPhotos = [..._photos];
 
       while (current < total) {
+        // Si el usuario seleccionó un álbum, dejar de cargar en background
+        if (_selectedAlbum != null) {
+          debugPrint('Carga en background cancelada: álbum seleccionado');
+          break;
+        }
+
         final end = (current + batchSize > total) ? total : current + batchSize;
         final batch = await _photoService.loadPhotosPaginated(start: current, end: end);
 
-        _photos = [..._photos, ...batch];
-        _filterUnreviewedPhotos();
-        notifyListeners();
+        allLoadedPhotos = [...allLoadedPhotos, ...batch];
+
+        // Solo actualizar _photos si NO hay álbum seleccionado
+        if (_selectedAlbum == null) {
+          _photos = allLoadedPhotos;
+          _filterUnreviewedPhotos();
+          notifyListeners();
+        }
 
         current = end;
       }
 
-      _photoService.setPhotos(_photos);
+      // Solo guardar si completamos la carga sin interrupción
+      if (_selectedAlbum == null) {
+        _photoService.setPhotos(_photos);
+      }
     } catch (e) {
       debugPrint('Error cargando fotos restantes: $e');
     }
@@ -181,22 +196,36 @@ class PhotoProvider extends ChangeNotifier {
     try {
       const batchSize = 500;
       int current = start;
+      List<Photo> allLoadedPhotos = [..._photos];
 
       while (current < total) {
+        // Si el usuario seleccionó un álbum, dejar de cargar en background
+        if (_selectedAlbum != null) {
+          debugPrint('Carga en background cancelada: álbum seleccionado');
+          break;
+        }
+
         final end = (current + batchSize > total) ? total : current + batchSize;
         final batch = await _photoService.loadPhotosPaginated(start: current, end: end);
 
-        _photos = [..._photos, ...batch];
-        _filterUnreviewedPhotos();
-        notifyListeners();
+        allLoadedPhotos = [...allLoadedPhotos, ...batch];
+
+        // Solo actualizar _photos si NO hay álbum seleccionado
+        if (_selectedAlbum == null) {
+          _photos = allLoadedPhotos;
+          _filterUnreviewedPhotos();
+          notifyListeners();
+        }
 
         current = end;
       }
 
-      // Guardar caché actualizado
-      final ids = _photos.map((p) => p.id).toList();
-      await _storageService.savePhotoCache(ids, total);
-      _photoService.setPhotos(_photos);
+      // Solo guardar caché si completamos sin interrupción
+      if (_selectedAlbum == null) {
+        final ids = _photos.map((p) => p.id).toList();
+        await _storageService.savePhotoCache(ids, total);
+        _photoService.setPhotos(_photos);
+      }
     } catch (e) {
       debugPrint('Error cargando fotos: $e');
     }
