@@ -96,6 +96,17 @@ class StorageService {
     await _reviewedBox?.clear();
   }
 
+  /// Borra solo las fotos conservadas (reviewed pero NO en trash)
+  Future<void> clearKeptPhotosOnly() async {
+    final reviewedIds = _reviewedBox?.keys.toList() ?? [];
+    for (final photoId in reviewedIds) {
+      // Solo borrar si NO está en la papelera
+      if (!(_trashBox?.containsKey(photoId) ?? false)) {
+        await _reviewedBox?.delete(photoId);
+      }
+    }
+  }
+
   // Get unreviewed photos
   List<String> getReviewedPhotoIds() {
     return _reviewedBox?.values.toList() ?? [];

@@ -48,11 +48,7 @@ class _TrashScreenState extends State<TrashScreen> {
           Consumer<TrashProvider>(
             builder: (context, provider, _) {
               if (provider.trashCount == 0) return const SizedBox.shrink();
-              return IconButton(
-                icon: Icon(
-                  provider.hasSelection ? Icons.deselect : Icons.select_all,
-                  color: colors.textPrimary,
-                ),
+              return TextButton(
                 onPressed: () {
                   if (provider.hasSelection) {
                     provider.clearSelection();
@@ -60,6 +56,13 @@ class _TrashScreenState extends State<TrashScreen> {
                     provider.selectAll();
                   }
                 },
+                child: Text(
+                  provider.hasSelection ? 'Deseleccionar' : 'Seleccionar todos',
+                  style: TextStyle(
+                    color: colors.primary,
+                    fontSize: size.width * 0.032,
+                  ),
+                ),
               );
             },
           ),

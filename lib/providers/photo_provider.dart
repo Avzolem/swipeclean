@@ -253,4 +253,33 @@ class PhotoProvider extends ChangeNotifier {
     _filterUnreviewedPhotos();
     notifyListeners();
   }
+
+  /// Verifica si hay fotos nuevas y las carga si es necesario
+  /// Retorna true si se encontraron cambios
+  Future<bool> checkForNewPhotos() async {
+    if (!_hasPermission || _isLoading) return false;
+
+    try {
+      final currentCount = await _photoService.getPhotoCount();
+
+      // Si el conteo cambió, recargar fotos
+      if (currentCount != _totalPhotoCount) {
+        await loadPhotos();
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Fuerza recarga completa de fotos (para pull-to-refresh)
+  Future<void> forceReload() async {
+    if (!_hasPermission || _isLoading) return;
+
+    // Limpiar caché para forzar recarga
+    _storageService.clearPhotoCache();
+    await loadPhotos();
+  }
 }

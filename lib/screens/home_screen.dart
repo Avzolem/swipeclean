@@ -34,21 +34,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Cuando la app regresa al primer plano (después de dar permisos en settings)
+    // Cuando la app regresa al primer plano
     if (state == AppLifecycleState.resumed) {
-      _checkPermissionAndLoad();
+      _onAppResumed();
     }
   }
 
-  Future<void> _checkPermissionAndLoad() async {
+  Future<void> _onAppResumed() async {
     final photoProvider = context.read<PhotoProvider>();
     final trashProvider = context.read<TrashProvider>();
 
     if (!photoProvider.hasPermission) {
+      // Si no tiene permisos, verificar si los dio en settings
       final hasPermission = await photoProvider.checkAndRequestPermission();
       if (hasPermission) {
         trashProvider.loadTrash();
       }
+    } else {
+      // Ya tiene permisos, verificar si hay fotos nuevas
+      await photoProvider.checkForNewPhotos();
+    }
+  }
+
+  /// Refresca los datos (para pull-to-refresh)
+  Future<void> _onRefresh() async {
+    final photoProvider = context.read<PhotoProvider>();
+    final trashProvider = context.read<TrashProvider>();
+
+    if (photoProvider.hasPermission) {
+      await photoProvider.forceReload();
+      trashProvider.loadTrash();
     }
   }
 
@@ -242,210 +257,493 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final padding = size.width * 0.05;
     final themeProvider = context.watch<ThemeProvider>();
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(padding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header con título y botón de tema
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    // Calcular stats
+    final totalPhotos = photoProvider.totalPhotos;
+    final reviewedCount = trashProvider.reviewedCount;
+    final pendingPhotos = photoProvider.remainingPhotos;
+    final progressPercent = totalPhotos > 0 ? (reviewedCount / totalPhotos * 100) : 0.0;
+
+    return RefreshIndicator(
+      onRefresh: _onRefresh,
+      color: colors.primary,
+      backgroundColor: colors.surface,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.all(padding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header: Logo + Theme switcher
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SwipeClean',
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: size.width * 0.08,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: size.height * 0.003),
+                    Text(
+                      'Limpia tu galería con swipes',
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: size.width * 0.032,
+                      ),
+                    ),
+                  ],
+                ),
+                _buildThemeButton(themeProvider, colors, size),
+              ],
+            ),
+            SizedBox(height: size.height * 0.025),
+
+            // Fila superior: Álbumes y Duplicadas
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSquareButton(
+                    'Álbumes',
+                    Icons.folder_rounded,
+                    colors.success,
+                    colors,
+                    size,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AlbumsScreen()),
+                    ),
+                  ),
+                ),
+                SizedBox(width: size.width * 0.04),
+                Expanded(
+                  child: _buildSquareButton(
+                    'Duplicadas',
+                    Icons.compare_rounded,
+                    colors.warning,
+                    colors,
+                    size,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DuplicatesScreen()),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: size.height * 0.02),
+
+            // Barra de progreso (encima del botón Limpiar)
+            _buildProgressBar(colors, size, pendingPhotos, progressPercent),
+            SizedBox(height: size.height * 0.015),
+
+            // Botón grande central: Limpiar
+            _buildMainCleanButton(
+              photoProvider,
+              trashProvider,
+              colors,
+              size,
+              reviewedCount,
+              totalPhotos,
+            ),
+            SizedBox(height: size.height * 0.02),
+
+            // Fila inferior: Papelera + Reiniciar
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Expanded(
+                    flex: 3,
+                    child: _buildTrashButton(trashProvider, colors, size),
+                  ),
+                  SizedBox(width: size.width * 0.04),
+                  Expanded(
+                    flex: 2,
+                    child: _buildResetButton(photoProvider, trashProvider, colors, size),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: size.height * 0.04),
+
+            // Footer
+            Center(
+              child: Text(
+                'Powered by avsolem.com',
+                style: TextStyle(
+                  color: colors.textTertiary,
+                  fontSize: size.width * 0.03,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+            ),
+            SizedBox(height: size.height * 0.02),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Botón de tema (solo icono)
+  Widget _buildThemeButton(ThemeProvider themeProvider, ThemeColors colors, Size size) {
+    return GestureDetector(
+      onTap: _toggleTheme,
+      child: Container(
+        padding: EdgeInsets.all(size.width * 0.035),
+        decoration: BoxDecoration(
+          color: colors.primary.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          themeProvider.themeIcon,
+          color: colors.primary,
+          size: size.width * 0.06,
+        ),
+      ),
+    );
+  }
+
+  /// Botones cuadrados (Álbumes, Duplicadas)
+  Widget _buildSquareButton(
+    String label,
+    IconData icon,
+    Color color,
+    ThemeColors colors,
+    Size size,
+    VoidCallback onTap,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: size.height * 0.025),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: size.width * 0.12,
+              ),
+              SizedBox(height: size.height * 0.01),
+              Text(
+                label,
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: size.width * 0.04,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Botón principal grande (Limpiar)
+  Widget _buildMainCleanButton(
+    PhotoProvider photoProvider,
+    TrashProvider trashProvider,
+    ThemeColors colors,
+    Size size,
+    int reviewedCount,
+    int totalPhotos,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SwipeScreen()),
+        ),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(
+            vertical: size.height * 0.035,
+            horizontal: size.width * 0.06,
+          ),
+          decoration: BoxDecoration(
+            color: colors.primary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            children: [
+              // Icono de swipe grande
+              Icon(
+                Icons.swipe_rounded,
+                color: colors.primary,
+                size: size.width * 0.16,
+              ),
+              SizedBox(height: size.height * 0.012),
+              // Texto "Limpiar"
+              Text(
+                'Limpiar',
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: size.width * 0.055,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: size.height * 0.02),
+              // Stats: ✓ Revisadas / Fotos totales
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    color: colors.success,
+                    size: size.width * 0.05,
+                  ),
+                  SizedBox(width: size.width * 0.015),
                   Text(
-                    'SwipeClean',
+                    '$reviewedCount',
                     style: TextStyle(
                       color: colors.textPrimary,
-                      fontSize: size.width * 0.07,
+                      fontSize: size.width * 0.05,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(height: size.height * 0.005),
                   Text(
-                    'Limpia tu galería con swipes',
+                    ' Revisadas',
                     style: TextStyle(
                       color: colors.textSecondary,
                       fontSize: size.width * 0.035,
                     ),
                   ),
+                  SizedBox(width: size.width * 0.04),
+                  Text(
+                    '/',
+                    style: TextStyle(
+                      color: colors.textTertiary,
+                      fontSize: size.width * 0.05,
+                    ),
+                  ),
+                  SizedBox(width: size.width * 0.04),
+                  Text(
+                    '$totalPhotos',
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: size.width * 0.05,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(width: size.width * 0.015),
+                  Icon(
+                    Icons.photo_library,
+                    color: colors.primary,
+                    size: size.width * 0.05,
+                  ),
                 ],
               ),
-              // Botón de tema
-              _buildThemeButton(themeProvider, colors, size),
             ],
           ),
-          SizedBox(height: size.height * 0.025),
+        ),
+      ),
+    );
+  }
 
-          // Stats cards
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  'Fotos',
-                  photoProvider.totalPhotos.toString(),
-                  Icons.photo_library,
-                  colors.primary,
-                  colors,
-                  size,
-                ),
-              ),
-              SizedBox(width: size.width * 0.03),
-              Expanded(
-                child: _buildStatCard(
-                  'Revisadas',
-                  trashProvider.reviewedCount.toString(),
-                  Icons.check_circle,
-                  colors.success,
-                  colors,
-                  size,
-                ),
-              ),
-            ],
+  /// Barra de progreso
+  Widget _buildProgressBar(
+    ThemeColors colors,
+    Size size,
+    int pendingPhotos,
+    double progressPercent,
+  ) {
+    return Container(
+      padding: EdgeInsets.all(size.width * 0.04),
+      decoration: BoxDecoration(
+        color: colors.info.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$pendingPhotos Fotos Pendientes de Revisar',
+            style: TextStyle(
+              color: colors.info,
+              fontSize: size.width * 0.035,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          SizedBox(height: size.height * 0.015),
-          Row(
+          SizedBox(height: size.height * 0.012),
+          // Barra de progreso
+          Stack(
             children: [
-              Expanded(
-                child: _buildStatCard(
-                  'En papelera',
-                  trashProvider.trashCount.toString(),
-                  Icons.delete,
-                  colors.danger,
-                  colors,
-                  size,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const TrashScreen()),
+              // Fondo
+              Container(
+                height: size.height * 0.025,
+                decoration: BoxDecoration(
+                  color: colors.divider,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              // Progreso
+              FractionallySizedBox(
+                widthFactor: progressPercent / 100,
+                child: Container(
+                  height: size.height * 0.025,
+                  decoration: BoxDecoration(
+                    color: colors.success,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  extraInfo: trashProvider.trashCount > 0 && !trashProvider.isCalculatingSpace
-                      ? '~${TrashProvider.formatBytes(trashProvider.estimatedSpaceBytes)} a liberar'
-                      : null,
-                ),
-              ),
-              SizedBox(width: size.width * 0.03),
-              Expanded(
-                child: _buildStatCard(
-                  'Pendientes',
-                  photoProvider.remainingPhotos.toString(),
-                  Icons.pending,
-                  colors.warning,
-                  colors,
-                  size,
+                  child: Center(
+                    child: Text(
+                      '${progressPercent.toStringAsFixed(2)}%',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: size.width * 0.028,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
-
-          SizedBox(height: size.height * 0.03),
-
-          // Action buttons
-          _buildActionButton(
-            'Empezar a limpiar',
-            Icons.swipe,
-            colors.primary,
-            colors,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SwipeScreen()),
-            ),
-            size,
-          ),
-          SizedBox(height: size.height * 0.012),
-          _buildActionButton(
-            'Ver papelera (${trashProvider.trashCount})',
-            Icons.delete_outline,
-            colors.danger,
-            colors,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TrashScreen()),
-            ),
-            size,
-          ),
-          SizedBox(height: size.height * 0.012),
-          _buildActionButton(
-            'Álbumes',
-            Icons.folder_outlined,
-            colors.success,
-            colors,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AlbumsScreen()),
-            ),
-            size,
-          ),
-          SizedBox(height: size.height * 0.012),
-          _buildActionButton(
-            'Duplicadas',
-            Icons.compare,
-            colors.warning,
-            colors,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const DuplicatesScreen()),
-            ),
-            size,
-          ),
-          SizedBox(height: size.height * 0.03),
-
-          // Botón de reiniciar si ya revisó fotos
-          if (trashProvider.reviewedCount > 0)
-            _buildActionButton(
-              'Reiniciar limpieza',
-              Icons.refresh,
-              colors.textTertiary,
-              colors,
-              () => _showResetDialog(context, size, photoProvider, trashProvider, colors),
-              size,
-            ),
-
-          SizedBox(height: size.height * 0.03),
-          Center(
-            child: Text(
-              'Powered by avsolem.com',
-              style: TextStyle(
-                color: colors.textTertiary,
-                fontSize: size.width * 0.03,
-                fontWeight: FontWeight.w300,
-              ),
-            ),
-          ),
-          SizedBox(height: size.height * 0.02),
         ],
       ),
     );
   }
 
-  Widget _buildThemeButton(ThemeProvider themeProvider, ThemeColors colors, Size size) {
-    return GestureDetector(
-      onTap: _toggleTheme,
-      child: Container(
-        padding: EdgeInsets.all(size.width * 0.03),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colors.divider),
+  /// Botón de papelera
+  Widget _buildTrashButton(
+    TrashProvider trashProvider,
+    ThemeColors colors,
+    Size size,
+  ) {
+    final hasSpace = trashProvider.trashCount > 0 && !trashProvider.isCalculatingSpace;
+    final spaceText = hasSpace
+        ? '~${TrashProvider.formatBytes(trashProvider.estimatedSpaceBytes)}'
+        : '';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TrashScreen()),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              themeProvider.themeIcon,
-              color: colors.primary,
-              size: size.width * 0.05,
-            ),
-            SizedBox(width: size.width * 0.02),
-            Text(
-              themeProvider.themeName,
-              style: TextStyle(
-                color: colors.textPrimary,
-                fontSize: size.width * 0.032,
-                fontWeight: FontWeight.w500,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: size.height * 0.015,
+            horizontal: size.width * 0.04,
+          ),
+          decoration: BoxDecoration(
+            color: colors.danger.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.delete_rounded,
+                color: colors.danger,
+                size: size.width * 0.08,
               ),
-            ),
-          ],
+              SizedBox(width: size.width * 0.025),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Papelera',
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: size.width * 0.038,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Text(
+                        '${trashProvider.trashCount} fotos',
+                        style: TextStyle(
+                          color: colors.danger,
+                          fontSize: size.width * 0.03,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (spaceText.isNotEmpty) ...[
+                        Text(
+                          ' · $spaceText',
+                          style: TextStyle(
+                            color: colors.textTertiary,
+                            fontSize: size.width * 0.028,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Botón de reiniciar
+  Widget _buildResetButton(
+    PhotoProvider photoProvider,
+    TrashProvider trashProvider,
+    ThemeColors colors,
+    Size size,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showResetDialog(context, size, photoProvider, trashProvider, colors),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: size.height * 0.02,
+            horizontal: size.width * 0.03,
+          ),
+          decoration: BoxDecoration(
+            color: colors.textTertiary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.refresh_rounded,
+                color: colors.textSecondary,
+                size: size.width * 0.1,
+              ),
+              SizedBox(height: size.height * 0.005),
+              Text(
+                'Reiniciar',
+                style: TextStyle(
+                  color: colors.textSecondary,
+                  fontSize: size.width * 0.03,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                'Limpieza',
+                style: TextStyle(
+                  color: colors.textTertiary,
+                  fontSize: size.width * 0.028,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -525,16 +823,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
-          // Botón Solo revisadas - fondo verde claro
+          // Botón Solo conservadas - fondo verde claro
           OutlinedButton(
             onPressed: () async {
               Navigator.pop(context);
-              await trashProvider.resetReviewProgress();
+              await trashProvider.resetKeptPhotosOnly();
               photoProvider.refresh();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('Progreso reiniciado (papelera conservada)'),
+                    content: const Text('Fotos conservadas reiniciadas (papelera intacta)'),
                     backgroundColor: colors.success,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -554,7 +852,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
             child: Text(
-              'Solo revisadas',
+              'Conservadas',
               style: TextStyle(
                 color: colors.success,
                 fontSize: size.width * 0.035,
@@ -598,141 +896,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-    ThemeColors colors,
-    Size size, {
-    VoidCallback? onTap,
-    String? extraInfo,
-  }) {
-    // Altura fija para que todas las cards sean iguales
-    final cardHeight = size.height * 0.11;
-
-    final content = Container(
-      height: cardHeight,
-      padding: EdgeInsets.all(size.width * 0.04),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Icono y número en línea
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: size.width * 0.06),
-              SizedBox(width: size.width * 0.025),
-              Text(
-                value,
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontSize: size.width * 0.065,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: size.height * 0.005),
-          // Label abajo
-          Text(
-            label,
-            style: TextStyle(
-              color: colors.textSecondary,
-              fontSize: size.width * 0.03,
-            ),
-          ),
-          // Info extra (ej: espacio a liberar)
-          if (extraInfo != null) ...[
-            SizedBox(height: size.height * 0.003),
-            Text(
-              extraInfo,
-              style: TextStyle(
-                color: color.withOpacity(0.8),
-                fontSize: size.width * 0.025,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-
-    if (onTap != null) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: content,
-        ),
-      );
-    }
-
-    return content;
-  }
-
-  Widget _buildActionButton(
-    String label,
-    IconData icon,
-    Color color,
-    ThemeColors colors,
-    VoidCallback onTap,
-    Size size,
-  ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: size.width * 0.04,
-            vertical: size.height * 0.018,
-          ),
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(size.width * 0.02),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: size.width * 0.05),
-              ),
-              SizedBox(width: size.width * 0.03),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: colors.textPrimary,
-                    fontSize: size.width * 0.038,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: colors.textTertiary,
-                size: size.width * 0.04,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

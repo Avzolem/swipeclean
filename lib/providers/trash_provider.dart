@@ -197,6 +197,12 @@ class TrashProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reinicia solo las fotos conservadas (NO afecta la papelera ni su conteo)
+  Future<void> resetKeptPhotosOnly() async {
+    await _storageService.clearKeptPhotosOnly();
+    notifyListeners();
+  }
+
   /// Reinicia todo (revisadas + papelera)
   Future<void> resetAll() async {
     await _storageService.clearReviewed();

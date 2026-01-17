@@ -487,7 +487,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
         ),
         actions: [
           // Este álbum / Solo conservadas
-          TextButton(
+          OutlinedButton(
             onPressed: () async {
               Navigator.pop(context);
               if (hasAlbum) {
@@ -495,7 +495,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                 final albumPhotoIds = photoProvider.photos.map((p) => p.id).toList();
                 await trashProvider.resetAlbum(albumPhotoIds);
               } else {
-                await trashProvider.resetReviewProgress();
+                await trashProvider.resetKeptPhotosOnly();
               }
               photoProvider.refresh();
               setState(() {
@@ -505,8 +505,11 @@ class _SwipeScreenState extends State<SwipeScreen> {
                 _frozenPhotos = null;
               });
             },
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: colors.primary),
+            ),
             child: Text(
-              hasAlbum ? 'Este álbum' : 'Solo conservadas',
+              hasAlbum ? 'Este álbum' : 'Conservadas',
               style: TextStyle(fontSize: size.width * 0.032),
             ),
           ),
