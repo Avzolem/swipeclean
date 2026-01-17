@@ -3,6 +3,7 @@ import 'package:photo_manager/photo_manager.dart';
 import '../models/trash_item.dart';
 import '../services/storage_service.dart';
 import '../services/photo_service.dart';
+import '../utils/formatters.dart' as utils;
 
 class TrashProvider extends ChangeNotifier {
   final StorageService _storageService = StorageService();
@@ -24,14 +25,7 @@ class TrashProvider extends ChangeNotifier {
   bool get isCalculatingSpace => _isCalculatingSpace;
 
   /// Formatea bytes a string legible (KB, MB, GB)
-  static String formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
+  static String formatBytes(int bytes) => utils.formatBytes(bytes);
 
   /// Calcula el espacio aproximado a liberar
   Future<void> calculateSpace() async {
@@ -45,12 +39,22 @@ class TrashProvider extends ChangeNotifier {
     notifyListeners();
 
     int totalBytes = 0;
+    final itemsWithoutSize = <TrashItem>[];
 
+    // Primero usar los tamaños almacenados (instantáneo)
     for (final item in _trashItems) {
+      if (item.width != null && item.height != null) {
+        totalBytes += item.estimatedSizeBytes;
+      } else {
+        itemsWithoutSize.add(item);
+      }
+    }
+
+    // Solo para items antiguos sin tamaño, hacer lookup (migración gradual)
+    for (final item in itemsWithoutSize) {
       try {
         final asset = await AssetEntity.fromId(item.photoId);
         if (asset != null) {
-          // Usar dimensiones como aproximación del tamaño
           totalBytes += (asset.width * asset.height * 0.5).toInt();
         }
       } catch (e) {
@@ -77,8 +81,18 @@ class TrashProvider extends ChangeNotifier {
     calculateSpace();
   }
 
-  Future<void> addToTrash(String photoId, {String? thumbnailPath}) async {
-    await _storageService.addToTrash(photoId, thumbnailPath: thumbnailPath);
+  Future<void> addToTrash(
+    String photoId, {
+    String? thumbnailPath,
+    int? width,
+    int? height,
+  }) async {
+    await _storageService.addToTrash(
+      photoId,
+      thumbnailPath: thumbnailPath,
+      width: width,
+      height: height,
+    );
     await _storageService.markAsReviewed(photoId);
     loadTrash();
   }

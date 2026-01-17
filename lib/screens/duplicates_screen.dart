@@ -9,6 +9,7 @@ import '../services/duplicate_detector.dart';
 import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/lazy_thumbnail.dart';
+import '../utils/formatters.dart';
 
 class DuplicatesScreen extends StatefulWidget {
   const DuplicatesScreen({super.key});
@@ -217,14 +218,6 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     _estimatedSpaceBytes = totalBytes;
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
 
   void _cancelSearch() {
     _detector.cancel();
@@ -358,7 +351,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                     ),
                   ),
                   Text(
-                    '~${_formatBytes(selectedSpace)} a liberar',
+                    '~${formatBytes(selectedSpace)} a liberar',
                     style: TextStyle(
                       color: colors.success,
                       fontSize: size.width * 0.032,
@@ -613,7 +606,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
                     child: Column(
                       children: [
                         Text(
-                          '~${_formatBytes(_estimatedSpaceBytes)}',
+                          '~${formatBytes(_estimatedSpaceBytes)}',
                           style: TextStyle(
                             color: colors.success,
                             fontSize: size.width * 0.035,
@@ -942,8 +935,21 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
     final trashProvider = context.read<TrashProvider>();
     final count = _selectedPhotos.length;
 
+    // Crear mapa de fotos para obtener dimensiones
+    final photoMap = <String, Photo>{};
+    for (final group in _duplicateGroups) {
+      for (final photo in group) {
+        photoMap[photo.id] = photo;
+      }
+    }
+
     for (final photoId in _selectedPhotos) {
-      await trashProvider.addToTrash(photoId);
+      final photo = photoMap[photoId];
+      await trashProvider.addToTrash(
+        photoId,
+        width: photo?.asset.width,
+        height: photo?.asset.height,
+      );
     }
 
     if (mounted) {

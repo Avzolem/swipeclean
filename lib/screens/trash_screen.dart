@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../providers/trash_provider.dart';
 import '../providers/photo_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
-import '../widgets/lazy_thumbnail.dart';
+import '../widgets/trash_thumbnail.dart';
 
 class TrashScreen extends StatefulWidget {
   const TrashScreen({super.key});
@@ -166,64 +165,50 @@ class _TrashScreenState extends State<TrashScreen> {
                     final item = trashProvider.trashItems[index];
                     final isSelected = trashProvider.selectedItems.contains(item.photoId);
 
-                    return FutureBuilder<AssetEntity?>(
-                      future: AssetEntity.fromId(item.photoId),
-                      builder: (context, snapshot) {
-                        return GestureDetector(
-                          onTap: () => trashProvider.toggleSelection(item.photoId),
-                          onLongPress: () => _showItemOptions(context, item.photoId, trashProvider, colors),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              if (snapshot.hasData && snapshot.data != null)
-                                LazyThumbnail(
-                                  asset: snapshot.data!,
-                                  size: (size.width * 0.35).toInt(),
-                                  fit: BoxFit.cover,
-                                )
-                              else
-                                Container(
-                                  color: colors.surface,
-                                  child: Icon(
-                                    Icons.broken_image,
-                                    color: colors.textTertiary,
-                                  ),
-                                ),
+                    return GestureDetector(
+                      onTap: () => trashProvider.toggleSelection(item.photoId),
+                      onLongPress: () => _showItemOptions(context, item.photoId, trashProvider, colors),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          TrashThumbnail(
+                            photoId: item.photoId,
+                            size: (size.width * 0.35).toInt(),
+                            fit: BoxFit.cover,
+                          ),
 
-                              // Selection overlay
-                              if (isSelected)
-                                Container(
-                                  color: colors.dangerWithOpacity(0.4),
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.check_circle,
-                                      color: Colors.white,
-                                      size: size.width * 0.1,
-                                    ),
-                                  ),
-                                ),
-
-                              // Selection indicator
-                              Positioned(
-                                top: size.width * 0.02,
-                                right: size.width * 0.02,
-                                child: Container(
-                                  width: size.width * 0.06,
-                                  height: size.width * 0.06,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isSelected ? colors.danger : colors.textTertiary,
-                                    border: Border.all(color: Colors.white, width: size.width * 0.005),
-                                  ),
-                                  child: isSelected
-                                      ? Icon(Icons.check, color: Colors.white, size: size.width * 0.04)
-                                      : null,
+                          // Selection overlay
+                          if (isSelected)
+                            Container(
+                              color: colors.dangerWithOpacity(0.4),
+                              child: Center(
+                                child: Icon(
+                                  Icons.check_circle,
+                                  color: Colors.white,
+                                  size: size.width * 0.1,
                                 ),
                               ),
-                            ],
+                            ),
+
+                          // Selection indicator
+                          Positioned(
+                            top: size.width * 0.02,
+                            right: size.width * 0.02,
+                            child: Container(
+                              width: size.width * 0.06,
+                              height: size.width * 0.06,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isSelected ? colors.danger : colors.textTertiary,
+                                border: Border.all(color: Colors.white, width: size.width * 0.005),
+                              ),
+                              child: isSelected
+                                  ? Icon(Icons.check, color: Colors.white, size: size.width * 0.04)
+                                  : null,
+                            ),
                           ),
-                        );
-                      },
+                        ],
+                      ),
                     );
                   },
                 ),

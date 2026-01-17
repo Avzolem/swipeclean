@@ -1,10 +1,9 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../providers/photo_provider.dart';
 import '../providers/theme_provider.dart';
-import '../services/storage_service.dart';
+import '../providers/albums_provider.dart';
 import '../theme/app_colors.dart';
 import 'swipe_screen.dart';
 
@@ -16,14 +15,8 @@ class AlbumsScreen extends StatefulWidget {
 }
 
 class _AlbumsScreenState extends State<AlbumsScreen> {
-  final StorageService _storageService = StorageService();
   bool _isLoadingAlbum = false;
   String? _loadingAlbumId;
-
-  // Cola de carga escalonada
-  final Map<String, _AlbumInfo> _albumInfoCache = {};
-  final List<String> _loadQueue = [];
-  bool _isProcessingQueue = false;
 
   Future<void> _onAlbumTap(AssetPathEntity album, PhotoProvider provider) async {
     if (_isLoadingAlbum) return;
@@ -43,7 +36,8 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
           provider.clearAlbumFilter();
           // Recalcular solo el estado de completado (sin recargar thumbnails)
           if (mounted) {
-            _recalculateCompletedStatus();
+            final albumsProvider = context.read<AlbumsProvider>();
+            albumsProvider.recalculateCompletedStatus(provider.albums);
           }
         });
       }
@@ -55,113 +49,6 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
         });
       }
     }
-  }
-
-  /// Encola un álbum para cargar su info
-  void _enqueueAlbumLoad(AssetPathEntity album) {
-    if (_albumInfoCache.containsKey(album.id)) return;
-    if (_loadQueue.contains(album.id)) return;
-
-    _loadQueue.add(album.id);
-    _processQueue();
-  }
-
-  /// Recalcula solo el estado de completado sin recargar thumbnails
-  Future<void> _recalculateCompletedStatus() async {
-    final provider = context.read<PhotoProvider>();
-
-    for (final album in provider.albums) {
-      final existingInfo = _albumInfoCache[album.id];
-      if (existingInfo == null) continue;
-
-      try {
-        final assets = await album.getAssetListRange(start: 0, end: existingInfo.count);
-        int reviewedCount = 0;
-
-        for (final asset in assets) {
-          if (_storageService.isReviewed(asset.id) ||
-              _storageService.isInTrash(asset.id)) {
-            reviewedCount++;
-          }
-        }
-
-        // Solo actualizar si cambió el reviewedCount
-        if (existingInfo.reviewedCount != reviewedCount && mounted) {
-          setState(() {
-            _albumInfoCache[album.id] = _AlbumInfo(
-              count: existingInfo.count,
-              thumbnail: existingInfo.thumbnail,
-              reviewedCount: reviewedCount,
-            );
-          });
-        }
-      } catch (e) {
-        // Ignorar errores
-      }
-    }
-  }
-
-  /// Procesa la cola de carga de forma escalonada
-  Future<void> _processQueue() async {
-    if (_isProcessingQueue) return;
-    _isProcessingQueue = true;
-
-    // Capturar provider antes del loop async
-    final provider = context.read<PhotoProvider>();
-
-    while (_loadQueue.isNotEmpty && mounted) {
-      final albumId = _loadQueue.removeAt(0);
-
-      // Buscar el álbum
-      final album = provider.albums.firstWhere(
-        (a) => a.id == albumId,
-        orElse: () => provider.albums.first,
-      );
-
-      if (album.id != albumId) continue;
-
-      try {
-        final count = await album.assetCountAsync;
-        Uint8List? thumbnail;
-        int reviewedCount = 0;
-
-        if (count > 0) {
-          final assets = await album.getAssetListRange(start: 0, end: count);
-
-          // Obtener thumbnail del primer asset
-          if (assets.isNotEmpty) {
-            thumbnail = await assets.first.thumbnailDataWithSize(
-              const ThumbnailSize(200, 200),
-            );
-          }
-
-          // Contar cuántas fotos están revisadas (en reviewed o en trash)
-          for (final asset in assets) {
-            if (_storageService.isReviewed(asset.id) ||
-                _storageService.isInTrash(asset.id)) {
-              reviewedCount++;
-            }
-          }
-        }
-
-        if (mounted) {
-          setState(() {
-            _albumInfoCache[albumId] = _AlbumInfo(
-              count: count,
-              thumbnail: thumbnail,
-              reviewedCount: reviewedCount,
-            );
-          });
-        }
-      } catch (e) {
-        // Ignorar errores silenciosamente
-      }
-
-      // Pequeño delay entre cargas para no saturar
-      await Future.delayed(const Duration(milliseconds: 50));
-    }
-
-    _isProcessingQueue = false;
   }
 
   @override
@@ -184,9 +71,9 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
           style: TextStyle(color: colors.textPrimary),
         ),
       ),
-      body: Consumer<PhotoProvider>(
-        builder: (context, provider, _) {
-          final albums = provider.albums;
+      body: Consumer2<PhotoProvider, AlbumsProvider>(
+        builder: (context, photoProvider, albumsProvider, _) {
+          final albums = photoProvider.albums;
 
           if (albums.isEmpty) {
             return Center(
@@ -201,9 +88,9 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
               final album = albums[index];
 
               // Encolar carga cuando el tile se construye
-              _enqueueAlbumLoad(album);
+              albumsProvider.enqueueAlbumLoad(album);
 
-              final info = _albumInfoCache[album.id];
+              final info = albumsProvider.getAlbumInfo(album.id);
 
               return _AlbumTile(
                 album: album,
@@ -211,7 +98,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 size: size,
                 isLoading: _loadingAlbumId == album.id,
                 isDisabled: _isLoadingAlbum && _loadingAlbumId != album.id,
-                onTap: () => _onAlbumTap(album, provider),
+                onTap: () => _onAlbumTap(album, photoProvider),
                 cachedInfo: info,
                 isCompleted: info?.isCompleted ?? false,
               );
@@ -223,18 +110,6 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
   }
 }
 
-/// Info cacheada de un álbum
-class _AlbumInfo {
-  final int count;
-  final Uint8List? thumbnail;
-  final int reviewedCount; // Cuántas fotos están revisadas
-
-  _AlbumInfo({required this.count, this.thumbnail, this.reviewedCount = 0});
-
-  /// El álbum está completo si todas sus fotos fueron revisadas
-  bool get isCompleted => count > 0 && reviewedCount >= count;
-}
-
 class _AlbumTile extends StatelessWidget {
   final AssetPathEntity album;
   final ThemeColors colors;
@@ -242,7 +117,7 @@ class _AlbumTile extends StatelessWidget {
   final VoidCallback onTap;
   final bool isLoading;
   final bool isDisabled;
-  final _AlbumInfo? cachedInfo;
+  final AlbumInfo? cachedInfo;
   final bool isCompleted;
 
   const _AlbumTile({

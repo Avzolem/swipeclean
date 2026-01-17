@@ -43,11 +43,18 @@ class StorageService {
   }
 
   // Trash operations
-  Future<void> addToTrash(String photoId, {String? thumbnailPath}) async {
+  Future<void> addToTrash(
+    String photoId, {
+    String? thumbnailPath,
+    int? width,
+    int? height,
+  }) async {
     final item = TrashItem(
       photoId: photoId,
       addedAt: DateTime.now(),
       thumbnailPath: thumbnailPath,
+      width: width,
+      height: height,
     );
     await _trashBox?.put(photoId, item);
   }

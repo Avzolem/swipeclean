@@ -20,19 +20,25 @@ class TrashItemAdapter extends TypeAdapter<TrashItem> {
       photoId: fields[0] as String,
       addedAt: fields[1] as DateTime,
       thumbnailPath: fields[2] as String?,
+      width: fields[3] as int?,
+      height: fields[4] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, TrashItem obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.photoId)
       ..writeByte(1)
       ..write(obj.addedAt)
       ..writeByte(2)
-      ..write(obj.thumbnailPath);
+      ..write(obj.thumbnailPath)
+      ..writeByte(3)
+      ..write(obj.width)
+      ..writeByte(4)
+      ..write(obj.height);
   }
 
   @override

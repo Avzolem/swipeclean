@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'providers/photo_provider.dart';
 import 'providers/trash_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/albums_provider.dart';
 import 'services/storage_service.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_colors.dart';
@@ -63,6 +64,7 @@ class _SwipeCleanAppState extends State<SwipeCleanApp> {
       providers: [
         ChangeNotifierProvider(create: (_) => PhotoProvider()),
         ChangeNotifierProvider(create: (_) => TrashProvider()),
+        ChangeNotifierProvider(create: (_) => AlbumsProvider()),
         ChangeNotifierProvider.value(value: _themeProvider),
       ],
       child: Consumer<ThemeProvider>(

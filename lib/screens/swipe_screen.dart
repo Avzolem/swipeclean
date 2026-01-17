@@ -224,7 +224,11 @@ class _SwipeScreenState extends State<SwipeScreen> {
                                         photoId: photo.id,
                                         wasAddedToTrash: true,
                                       ));
-                                      trashProvider.addToTrash(photo.id);
+                                      trashProvider.addToTrash(
+                                        photo.id,
+                                        width: photo.asset.width,
+                                        height: photo.asset.height,
+                                      );
                                     } else if (direction == CardSwiperDirection.right) {
                                       // Guardar acción en historial antes de ejecutar
                                       _actionHistory.add(_SwipeAction(

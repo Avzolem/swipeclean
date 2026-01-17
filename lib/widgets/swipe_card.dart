@@ -1,7 +1,10 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:provider/provider.dart';
 import '../models/photo.dart';
+import '../providers/theme_provider.dart';
+import '../utils/formatters.dart';
 
 /// Caché global de imágenes precargadas
 class ImagePreloadCache {
@@ -166,11 +169,13 @@ class _SwipeCardState extends State<SwipeCard> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final themeProvider = context.watch<ThemeProvider>();
+    final colors = themeProvider.colors;
 
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(size.width * 0.05),
-        color: const Color(0xFF16213E),
+        color: colors.card,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -188,10 +193,10 @@ class _SwipeCardState extends State<SwipeCard> {
             GestureDetector(
               onTap: () => _showFullImage(context),
               child: Container(
-                color: const Color(0xFF16213E),
+                color: colors.card,
                 child: _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(color: Colors.white54),
+                    ? Center(
+                        child: CircularProgressIndicator(color: colors.textTertiary),
                       )
                     : _imageData != null
                         ? Image.memory(
@@ -202,7 +207,7 @@ class _SwipeCardState extends State<SwipeCard> {
                         : Center(
                             child: Icon(
                               Icons.broken_image,
-                              color: Colors.white54,
+                              color: colors.textTertiary,
                               size: size.width * 0.12,
                             ),
                           ),
@@ -236,7 +241,7 @@ class _SwipeCardState extends State<SwipeCard> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(size.width * 0.05),
                     border: Border.all(
-                      color: widget.swipeProgress < 0 ? Colors.red : Colors.green,
+                      color: widget.swipeProgress < 0 ? colors.danger : colors.success,
                       width: size.width * 0.01,
                     ),
                   ),
@@ -256,14 +261,14 @@ class _SwipeCardState extends State<SwipeCard> {
                       vertical: size.height * 0.01,
                     ),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.red, width: size.width * 0.008),
+                      border: Border.all(color: colors.danger, width: size.width * 0.008),
                       borderRadius: BorderRadius.circular(size.width * 0.02),
                       color: Colors.black.withOpacity(0.3),
                     ),
                     child: Text(
                       'ELIMINAR',
                       style: TextStyle(
-                        color: Colors.red,
+                        color: colors.danger,
                         fontSize: size.width * 0.06,
                         fontWeight: FontWeight.bold,
                       ),
@@ -285,14 +290,14 @@ class _SwipeCardState extends State<SwipeCard> {
                       vertical: size.height * 0.01,
                     ),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green, width: size.width * 0.008),
+                      border: Border.all(color: colors.success, width: size.width * 0.008),
                       borderRadius: BorderRadius.circular(size.width * 0.02),
                       color: Colors.black.withOpacity(0.3),
                     ),
                     child: Text(
                       'CONSERVAR',
                       style: TextStyle(
-                        color: Colors.green,
+                        color: colors.success,
                         fontSize: size.width * 0.06,
                         fontWeight: FontWeight.bold,
                       ),
@@ -308,12 +313,12 @@ class _SwipeCardState extends State<SwipeCard> {
               child: Container(
                 padding: EdgeInsets.all(size.width * 0.015),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
+                  color: colors.overlay,
                   borderRadius: BorderRadius.circular(size.width * 0.05),
                 ),
                 child: Icon(
                   Icons.fullscreen,
-                  color: Colors.white70,
+                  color: colors.textSecondary,
                   size: size.width * 0.05,
                 ),
               ),
@@ -329,9 +334,9 @@ class _SwipeCardState extends State<SwipeCard> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _formatDate(widget.photo.createdAt),
+                    formatDate(widget.photo.createdAt),
                     style: TextStyle(
-                      color: Colors.white,
+                      color: colors.textPrimary,
                       fontSize: size.width * 0.045,
                       fontWeight: FontWeight.w600,
                     ),
@@ -340,7 +345,7 @@ class _SwipeCardState extends State<SwipeCard> {
                     Text(
                       widget.photo.albumName!,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: colors.textSecondary,
                         fontSize: size.width * 0.035,
                       ),
                     ),
@@ -353,13 +358,6 @@ class _SwipeCardState extends State<SwipeCard> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    final months = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
-    ];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
-  }
 }
 
 // Visor de imagen a pantalla completa con zoom
@@ -382,7 +380,7 @@ class FullImageViewer extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _formatDate(photo.createdAt),
+          formatDate(photo.createdAt),
           style: TextStyle(color: Colors.white, fontSize: size.width * 0.04),
         ),
       ),
@@ -428,13 +426,5 @@ class FullImageViewer extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    final months = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
-    ];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 }
